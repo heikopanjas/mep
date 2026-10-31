@@ -1,0 +1,572 @@
+# MEP — Implementation Plan
+
+Handoff document for the coding agent. Read it completely before writing code. Everything under "Decisions" is settled; do not reopen it without asking the owner.
+
+---
+
+## 0. Ground rules
+
+1. **Clean room.** Never use, search for, or read the leaked Windows NT source code of MEP, and do not read the source of other MEP/Z clones. The behavior comes only from the manuals listed in §2 and from observing a real MEP binary.
+2. **The manual is the spec.** For every command and switch, the Microsoft Editor User's Guide (1988) is authoritative. Where this plan and the manual disagree, stop and ask.
+3. **Spec first, then tests, then code.** Before implementing a command, write its behavior per argument kind into `docs/spec/commands/<name>.md` (from the manual), then write tests from that spec, then implement.
+4. **ORACLE items.** Some behaviors are ambiguous or contradictory in the manual (§11). Implement the manual's reading, mark the code and its test with `// ORACLE: <id>`. Tests stay active (§9.5). The owner will confirm against a real binary.
+5. **No panics on user input.** Every command returns `bool` (the original `flagType` TRUE/FALSE) because macros branch on it. Failure = `false` + message on the dialog line.
+6. **Dependencies.** Only the crates named in §4.3. Any additional crate (runtime or dev) needs a one-line justification in the PR/commit message and the owner's OK.
+7. Small commits, each building and passing `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` and the coverage gate (§9.1) on Windows, macOS and Linux.
+8. **100% test coverage is a hard acceptance criterion** (§9). No task is done and no commit is acceptable while coverage is below 100%. Code that cannot be covered by a test is redesigned until it can, not excluded. The only exclusions are the OS glue files fixed in §9.1.
+
+---
+
+## 1. Goal
+
+A faithful, private reimplementation of Microsoft's **MEP** text editor (M/MEP, 1988, version 1.01 command set) for modern Windows, macOS and Linux terminals, written in Rust.
+
+The motivation: an existing Windows 11 port of MEP has no access to the system clipboard, which makes it useless for daily work. **System clipboard integration is the reason this project exists** and must work in the first milestone.
+
+Non-goals for now: syntax highlighting, GUI, mouse support, Z editor behavior, the original support programs (UNDEL/RM/EXP, MEGREP, CALLTREE), DOS-era switches that make no sense today.
+
+---
+
+## 2. Sources
+
+All in `docs/sources/` (see `docs/sources/README.md` for conventions):
+
+| File | Role |
+|---|---|
+| `microsoft-editor-users-guide-1988.md` — Microsoft Editor User's Guide, Feb 1988 (M for DOS / MEP for OS/2), Doc. No. 614510001-100-R00-0288 | **Primary spec.** Commands, arguments, switches, TOOLS.INI, macros, default keys (appendix tables), regex. |
+| `msj-1988-notenboom-customizing-m-editor.md` — Notenboom, "Customizing the Features of the M Editor Using Macros and C Extensions", MSJ Sep 1988 | Macro semantics in practice, pseudo-files, extension ABI (cmdTable, swiTable, ARG, callback list), the worked `filter` extension. |
+| `z-editor-users-guide-1986.txt` (cleaned) and `z-editor-users-guide-1986-raw.txt` — User's Guide to the Z Editor v7.43, 1986 | Secondary only: clarifies shared concepts (arg model, regex, macros) where the M guide is thin. Z-only behavior is **not** implemented. |
+| `z-vs-mep.md` | Divergence catalog and spec traps. MEP wins every conflict. |
+| `mep-z-brief.md` | Decision record this plan is built from. |
+
+---
+
+## 3. Decisions (settled)
+
+### 3.1 Identity and behavior
+- Name **MEP**; executable `mep` / `mep.exe`. Other names only via user-created links.
+- MEP 1988 behavior only. No Z personality, no alternate keymaps (Quick/WordStar, BRIEF, Epsilon) in the first release.
+- **TOOLS.INI section = executable name**, as in the original: running as `mep` reads `[mep]`; a link named `mz` reads `[mz]`. Section names match case-insensitively. Multi-name tags (`[m mep]`) and tagged variants (§6.12) as in the original.
+- **Selection model** exactly as the original (§6.5). No global box/stream mode.
+- **Screen**: no separate command line. Bottom two rows fixed: dialog line, status line. Editing area = terminal size, adapts live on resize. `height`/`width` switches only take effect when set explicitly in TOOLS.INI.
+- **Scrolling**: jump scrolling, defaults `vscroll:7`, `hscroll:10`, `hike:4`.
+- **Backups**: `backup:` switch with `none` (default) and `bak`. No `undel` mode.
+- No support programs. Cross-file search later via `arg arg "grep -n …" compile` (M4).
+
+### 3.2 Encoding
+- Buffer stores **UTF-8 bytes unchanged**. Invalid bytes are displayed as a placeholder (one cell, e.g. `�` in the "error" color) and written back **byte-exact**.
+- A **column is a display cell**. Box edges, `hscroll`, tabs, cursor column and status position count cells. Wide characters take two cells (`unicode-width`). Zero-width characters attach to the preceding character.
+- A box edge that splits a wide character: the character belongs to the box if its **first** cell is inside. Paste fills a resulting half-cell gap with a space.
+- No UTF-16, no code pages in the first release.
+
+### 3.3 Clipboard
+- `<clipboard>` is a pseudo-file (§6.9) **mapped to the system clipboard**.
+- The clipboard carries a **shape**: line, box or stream.
+- **Copy** writes two representations at once:
+  - plain UTF-8 text for other applications (box: one row per line, trailing padding trimmed, rows joined with the platform newline);
+  - a **private format** (custom clipboard type, e.g. `com.panjas.mep.shape` / registered format name `MEP Clipboard Shape`) containing: format version, shape, box width in cells, and a 64-bit hash of the plain text exactly as written.
+- **Paste**: if the private format is present **and** its hash matches the current plain text, use its shape (and box width). Otherwise the text came from another app: **ends with a newline → line paste, otherwise → stream paste.**
+- **OSC 52** (remote sessions, M3): copy sends plain text only; paste uses the internal clipboard and the newline rule.
+- Opening `<clipboard>` with `setfile` shows the **current** system clipboard contents.
+
+### 3.4 Implementation
+- **Rust**, stable toolchain, edition 2024. Cargo workspace (§4).
+- Own **byte-based gap buffer** (not `ropey`, which requires valid UTF-8).
+- `crossterm` for terminal I/O on all platforms; `clipboard-rs` for the system clipboard; `libloading` for extensions (M4).
+- Extensions use a **C ABI** (M4) so they can be written in C like the originals.
+- Child processes and background jobs via `std::process`, threads and channels (M4). The core is single-threaded and deterministic.
+
+---
+
+## 4. Architecture
+
+### 4.1 Workspace layout
+
+```
+mep/
+├── Cargo.toml              # workspace
+├── rust-toolchain.toml     # channel = "stable", components = ["llvm-tools-preview"]
+├── scripts/check           # fmt + clippy + test + coverage gate (sh and .ps1)
+├── crates/
+│   ├── mep-core/           # all editor logic; no terminal, no OS clipboard
+│   ├── mep-term/           # crossterm front end: Terminal trait impl, key decoding
+│   ├── mep-clip/           # SystemClipboard trait impls (clipboard-rs; OSC 52 in M3)
+│   └── mep/                # binary: CLI parsing, wiring, event loop
+├── docs/
+│   ├── sources/            # manuals (provided)
+│   ├── spec/commands/      # one file per command, transcribed from the manual
+│   ├── spec/switches.md
+│   └── oracle.md           # ORACLE items and their confirmed results
+└── tests/scenarios/        # scenario test files (§9.3)
+```
+
+`mep-core` has `#![forbid(unsafe_code)]`. Unsafe code is only allowed in the future extension crate (M4).
+
+### 4.2 Core boundaries (traits)
+
+```rust
+// mep-core
+pub trait Terminal {
+    fn size(&self) -> (u16, u16);                 // cols, rows
+    fn draw(&mut self, frame: &Frame) -> io::Result<()>;   // full frame; impl diffs
+}
+
+pub trait SystemClipboard {
+    fn read(&mut self) -> Option<ClipboardPayload>;        // text + optional private record
+    fn write(&mut self, payload: &ClipboardPayload) -> bool;
+}
+
+pub trait Fs {                                    // all file system access of the core
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
+    fn write_atomic(&self, path: &Path, data: &[u8]) -> io::Result<()>; // temp + rename
+    fn rename(&self, from: &Path, to: &Path) -> io::Result<()>;
+    fn metadata(&self, path: &Path) -> io::Result<FileMeta>;      // exists, readonly
+    fn read_dir_names(&self, dir: &Path) -> io::Result<Vec<OsString>>; // case-insensitive TOOLS.INI lookup
+}
+
+pub trait Env {                                   // environment and clock
+    fn var(&self, name: &str) -> Option<OsString>;
+    fn now(&self) -> LocalDateTime;
+    fn os(&self) -> Os;                           // Windows / MacOs / Linux
+}
+
+pub enum Event { Key(Key), Resize(u16, u16) }
+```
+
+The editor is a state machine: `Editor::handle(event) -> Outcome` (`Continue` / `Quit`), then `Editor::render(&mut Frame)`. The binary owns the loop: read event from `mep-term` → `handle` → `render` → `Terminal::draw`. Tests use an in-memory clipboard, an in-memory `Fs` with injectable failures (so every I/O error path is testable), a fixed `Env`, and render into a `Frame` without any terminal. `mep-core` never calls `std::fs`, `std::env` or the system clock directly.
+
+### 4.3 Allowed crates
+
+| Crate | Where | Why |
+|---|---|---|
+| `crossterm` | mep-term | Windows console + VT, resize events, keyboard enhancement (kitty protocol) |
+| `clipboard-rs` | mep-clip | System clipboard incl. custom formats on Windows, macOS, X11 (Wayland optional) |
+| `unicode-width` | mep-core | Cell widths |
+| `libloading` | M4 extension crate | Loading native extensions |
+| `regex` / `fancy-regex` | M2, mep-core | Regex backend after dialect translation (§10) |
+| `tempfile` (dev) | tests | Temp dirs for file I/O tests |
+| `proptest` (dev) | mep-core tests | Property tests for gap buffer and cell mapping |
+
+Hash for the clipboard record: implement FNV-1a 64 yourself (a few lines) rather than adding a crate.
+
+Command-line parsing is hand-written (§6.1); no `clap`.
+
+Tool (not a crate dependency): `cargo-llvm-cov` for coverage measurement and the gate (§9.1).
+
+### 4.4 Core modules (`mep-core`)
+
+| Module | Responsibility |
+|---|---|
+| `gap` | `GapBuffer`: byte storage, insert/delete at byte offset, slice access. |
+| `lines` | Line index over the gap buffer (line start offsets), line terminator per line. |
+| `cells` | UTF-8 decoding with invalid-byte handling, cell widths, cell column ↔ byte offset, tab expansion, placeholder rendering. |
+| `file` | `File` (one open file or pseudo-file), `FileTable` with `FileId` handles, load/save, line-ending detection, modified/readonly flags, backup. |
+| `view` | Window state: top line, left column, cursor (line, cell col); scrolling rules. |
+| `arg` | Arg accumulation state, anchor, text arg editing, classification, numarg/markarg conversion. |
+| `cmd` | `CmdDesc` table (name, fn, flags), dispatcher. |
+| `commands/*` | Implementations, grouped: `movement`, `edit`, `clipboard`, `search`, `files`, `misc`. |
+| `keys` | `Key` type, key-name parser/printer (`alt+x`, `ctrl+g`, `shift+f2`, `num+`…), keymap (key → function name), default MEP bindings. |
+| `switches` | Switch table (name, type, default, setter), validation, messages. |
+| `ini` | TOOLS.INI locating and parsing, section selection, tags. |
+| `macros` | Macro definitions, parser, interpreter (labels, jumps, return values). |
+| `undo` | Per-file undo records, `undocount`. |
+| `clip` | Clipboard model: shape + content, conversion to/from `ClipboardPayload`, the paste-shape rules. |
+| `render` | Builds the `Frame`: text area, dialog line, status line, colors. |
+| `editor` | Top-level `Editor`: file table, current file, view, arg state, keymap, macros, switches, message line. |
+
+---
+
+## 5. Data model details
+
+### 5.1 Lines and terminators
+- The file's bytes go into the gap buffer **as they are**, including line terminators.
+- A line ends at `\n`. A `\r` directly before `\n` is part of the terminator, not of the line content.
+- Each file has a **default terminator**: CRLF if any line ends in CRLF, else LF. Files with only LF endings show **"NL"** in the status line. New lines use the default terminator. Unedited lines keep their exact bytes, so mixed-ending files round-trip unchanged.
+- A missing terminator on the last line is preserved.
+
+### 5.2 Tabs (ORACLE: TAB-1)
+- Tab characters in the file are displayed expanded to the next multiple of 8 cells. `tabdisp` (default 32 = space) is the character used to draw the expansion.
+- When a line containing tabs is **edited**, it is converted to its expanded form (spaces) for editing.
+- On save, **edited** lines are re-tabbed according to `entab` (0 = no tabs, 1 = convert leading/inner runs of spaces outside quotes to tabs, 2 = everywhere; confirm the exact meaning of each value in the manual). Unedited lines are written byte-exact.
+- `tabstops` (default 4) controls the `tab`/`backtab` cursor movement, not file tab width.
+
+### 5.3 Trailing spaces
+- Unless `trailspace` is on, trailing spaces are removed from a line **when that line is edited**. Unedited lines are never touched.
+- `traildisp` (default 0 = off) makes trailing spaces visible with the given character.
+
+### 5.4 Cursor and virtual space
+- Cursor position = (line index, cell column). The cursor may be **beyond the end of the line** and beyond the last line; MEP allows this, and box selections depend on it.
+- Inserting text beyond the end of a line pads the line with spaces first.
+- The status line shows positions **1-based**; internally everything is 0-based.
+
+### 5.5 Line length
+- No line length limit (the original's 250-character limit is not reproduced).
+
+### 5.6 Files and handles
+- `FileId` is an index into `FileTable` (stable for the file's lifetime). This later becomes the extension ABI's PFILE.
+- Pseudo-files: names in angle brackets (`<clipboard>`, later `<information>`, extension-created ones). They behave like files but cannot be saved without an explicit filename.
+- Read-only files (no write permission) set the `readonly` state; editing them is allowed only after the user confirms per the manual's behavior.
+
+### 5.7 Undo
+- One undo step per **top-level command invocation**. A macro invoked from a key is one step (ORACLE: UNDO-1).
+- `undocount` (default 10) limits the number of steps kept per file.
+- Undo restores text and cursor position.
+
+---
+
+## 6. Behavior specification (M1 scope)
+
+The manual is the detailed spec; this section fixes structure and the points the manual leaves to the implementer.
+
+### 6.1 Command-line interface
+```
+mep [options] [file ...]
+
+  -d, --no-tools-ini         do not read TOOLS.INI
+  -e, --execute <command>    execute <command> (macro syntax) after startup
+  -t, --temporary            files are temporary (not recorded in the information file; effective from M3)
+  -h, --help                 print usage to stdout and exit 0
+  -V, --version              print version to stdout and exit 0
+  --                         end of options; all following arguments are files
+```
+- Short and long options work on **all** systems. `--execute=<command>` is accepted as well as `--execute <command>`.
+- On Windows, the original forms `/d`, `/e <command>` and `/t` are accepted in addition (case-insensitive). On macOS/Linux there are no `/` options, because `/e…` collides with absolute paths.
+- Short options are not bundled (`-dt` is an error).
+- `-e` may be given several times; the commands run in order.
+- Unknown option or missing `<command>`: message and usage to stderr, exit code 2.
+- The parser is a pure function (`args → Result<CliOptions, CliError>`) in `mep-core` so every case is unit-tested.
+- No file: reopen the last edited file (M3; in M1 start with an empty untitled buffer).
+- Several files: `exit` walks the list (§6.10).
+
+### 6.2 Screen layout
+```
+row 0 .. rows-3   text window
+row rows-2        dialog line   (messages; "Arg:" prompt and text-arg editing)
+row rows-1        status line
+```
+Status line fields (up to 8, in this order; confirm format against the manual): file name, file type, `modified`, `NL` (LF-only file), length in lines, position (`displaycursor` decides cursor vs window position), `insert`, `meta`.
+
+### 6.3 Scrolling
+- Cursor leaves the window vertically → window jumps by `vscroll` lines.
+- Cursor leaves horizontally → window jumps by `hscroll` columns.
+- After a jump of more than one window (search, `home`, line-number moves), the cursor line is placed `hike` lines from the top.
+- On terminal resize: keep the cursor line visible, clamp, redraw. `height`/`width` from TOOLS.INI override the terminal size (clamped to it).
+
+### 6.4 Colors
+Color switches take **DOS text attributes in hex** (high nibble background, low nibble foreground; e.g. `hgcolor:70` = black on light grey). Map the 16 DOS colors to the 16 ANSI colors. Switches: `fgcolor` (07), `hgcolor` (70, highlighted selection), `stacolor` (03, status), `infcolor` (06), `errcolor` (04). The values are hex digits `0`–`F` per M guide Table 7.1 (p. 58); background values `8`–`F` mean the colors `0`–`7` with blinking text — render them as the bright ANSI background instead (terminals rarely blink). Example from the manual: `errcolor:0E` = light yellow on black.
+
+### 6.5 Arguments
+- `arg` starts argument mode at the cursor (the **anchor**); further `arg` presses increase the arg count (`arg arg` = 2, used for regex and other variants).
+- Typing printable characters in arg mode starts a **text argument**, edited on the dialog line. Cursor-movement commands (flag `CURSORFUNC`) instead extend a **selection**, highlighted with `hgcolor`.
+- Classification when the next non-cursor function runs:
+
+| Situation | Arg kind |
+|---|---|
+| `arg` then function, no movement, no text | `nullarg` |
+| text typed | `textarg` (a number → `numarg` if the function accepts it; a mark name → `markarg`, M2) |
+| cursor moved, same line | `streamarg` (characters on one line) |
+| cursor moved, same column | `linearg` (whole lines) |
+| cursor moved, other line and column | `boxarg` |
+| no `arg` at all | `noarg` |
+
+- Right edge is **exclusive**: a box/stream ends one column left of the rightmost of anchor and cursor.
+- Each command declares accepted kinds in its `CmdDesc` flags: `NOARG, TEXTARG, NULLARG, LINEARG, STREAMARG, BOXARG, NUMARG, MARKARG`, plus modifiers `BOXSTR` (one-line box → textarg), `NULLEOL` / `NULLEOW` (nullarg → textarg from cursor to end of line / word), `KEEPMETA`, `CURSORFUNC`, `WINDOWFUNC`, `MODIFIES`.
+- A multi-line box-shaped selection is interpreted per command: `ldelete`, `linsert`, `copy`, `replace` get a box; `sdelete` gets a stream. (Check each command's entry in the manual.)
+- **Conversion in the dispatcher** before the command runs: `numarg` → `linearg` (n lines from the cursor); `markarg` → stream/box/line depending on relative position (M2). Commands never see `numarg`/`markarg`.
+- A command called with an arg kind it does not accept: message "invalid argument" and return `false`.
+- `cancel` clears arg mode and the selection.
+- `lasttext` recalls the previous text argument for editing.
+
+### 6.6 Meta
+`meta` toggles the meta flag and **returns the new state**. Most commands clear meta after running; commands with `KEEPMETA` leave it. The status line shows `meta` while set.
+
+### 6.7 Command set for M1
+
+From the M 1.01 function list (MSJ Fig. 1) plus the M text-insertion functions. Each gets a spec file in `docs/spec/commands/`.
+
+| Group | Commands |
+|---|---|
+| Argument and control | `arg`, `meta`, `cancel`, `assign`, `execute`, `initialize`, `lasttext`, `unassigned`, `undo` |
+| Cursor movement | `left`, `right`, `up`, `down`, `begline`, `endline`, `home`, `pword`, `mword`, `plines`, `mlines`, `ppage`, `mpage`, `ppara`, `mpara` (ORACLE S4), `tab`, `backtab`, `newline`, `savecur`, `restcur` |
+| Window (single window) | `setwindow` |
+| Editing | `graphic`, `insertmode`, `quote`, `cdelete`, `emacscdel`, `emacsnewl`, `sdelete`, `sinsert`, `ldelete`, `linsert` (MEP: inserts **above**), `pbal` |
+| Clipboard | `copy`, `paste` (ORACLE S5 for `arg arg textarg paste`; the `arg arg !textarg paste` / `arg arg !streamarg paste` form runs a command and inserts its stdout at the cursor, M guide p. 102 — M4, reports "not available" in M1) |
+| Search | `psearch`, `msearch` — plain strings only in M1 (`arg arg` regex form returns "not yet supported" until M2) |
+| Files | `setfile`, `refresh`, `exit` |
+| Text insertion | `curdate`, `curday`, `curtime`, `curuser`, `curfile`, `curfilenam`, `curfileext` |
+
+`curuser`: use `MAILNAME` if set, else `USER` (macOS/Linux) or `USERNAME` (Windows). (Manual contradicts itself between USER and MAILNAME.)
+
+Later milestones: `mark`, `replace`, `qreplace` (M2); `window`, `information` (M3); `compile`, `argcompile`, `shell` (M4). Until then they exist in the table and report "not available".
+
+### 6.8 Default key bindings (MEP)
+
+The complete default keymap is the **Default** column of Table A.2 (M guide pp. 90–92). It is reproduced here; the manual wins if they ever differ. The Quick/WordStar, BRIEF and EPSILON columns are not implemented in the first release.
+
+| Function | Keys | Function | Keys |
+|---|---|---|---|
+| arg | Alt+A | meta | F9 |
+| cancel | Esc | assign | Alt+= |
+| exit | F8 | setfile | F2 |
+| initialize | Shift+F8 | refresh | Shift+F7 |
+| execute | F7 | psearch / msearch | F3 / F4 |
+| replace / qreplace | Ctrl+L / Ctrl+\ | copy | Ctrl+Ins, Num+ |
+| paste | Shift+Ins | ldelete / linsert | Ctrl+Y / Ctrl+N |
+| sdelete / sinsert | Del / Ctrl+J | cdelete | Ctrl+G |
+| emacscdel | Backspace | emacsnewl | Enter |
+| insertmode | Ins, Ctrl+V | begline / endline | Home / End |
+| home | Ctrl+Home | mark | Ctrl+M |
+| ppage / mpage | PgDn, Ctrl+C / PgUp, Ctrl+R | plines / mlines | Ctrl+Z / Ctrl+W |
+| ppara / mpara | Ctrl+PgDn / Ctrl+PgUp | pword / mword | Ctrl+Right, Ctrl+F / Ctrl+Left, Ctrl+A |
+| pbal | Ctrl+[ | setwindow | Ctrl+] |
+| quote | Ctrl+P | lasttext | Ctrl+O |
+| undo | Alt+Backspace | information / help | Shift+F1 / F1 |
+| compile / argcompile | Shift+F3 / F5 | shell | Shift+F9 |
+| window | F6 | left / right | Left, Ctrl+S / Right, Ctrl+D |
+| up / down | Up, Ctrl+E / Down, Ctrl+X | tab / backtab | Tab / Shift+Tab |
+| graphic | all printable keys | | |
+
+No default key: `curdate`, `curday`, `curfile`, `curfileext`, `curfilenam`, `curtime`, `curuser`, `newline`, `savecur`, `restcur`. Everything else: `unassigned`.
+
+The WordStar-style control keys are part of the default map: Ctrl+E/X/S/D move the cursor, Ctrl+A/F move by word, Ctrl+R/C by page. Ctrl+S and Ctrl+Q are XON/XOFF flow control in many terminals and must be freed in raw mode (§7).
+
+### 6.9 Clipboard behavior
+- `copy` with an arg copies the selection with its shape; `noarg` copies the current line (line shape) — confirm in the manual.
+- Block deletes (`ldelete`, `sdelete` with an arg, box delete) also put the deleted text into the clipboard, as in the original.
+- `paste` inserts according to the shape: line → whole lines above/below per the manual; box → as a box at the cursor (pad with spaces as needed); stream → at the cursor.
+- Every write to the clipboard goes to the system clipboard via `SystemClipboard::write` (§3.3). Every paste first reads the system clipboard.
+- If the system clipboard is unavailable (no display, error), fall back to the internal clipboard silently and show a one-time message.
+- `<clipboard>` pseudo-file: opening it fills it with the current clipboard text; it can be edited and saved under a real name.
+
+### 6.10 Files and exit (MEP semantics, divergence S2)
+- `setfile` variants (from the manual; key ones): `setfile` (noarg) switches to the previous file; `arg "name" setfile` opens/switches to a file; `arg arg setfile` saves the current file; `arg arg "name" setfile` saves under that name. Confirm every variant and the `meta` forms in the manual.
+- `autosave` (default on): switching away from a modified file saves it.
+- `exit`: saves the current file if modified and **advances to the next file** from the command line; at the last file it quits. `arg exit` quits without advancing. `meta exit` quits without saving. `askexit` (default off) asks before quitting.
+- `refresh` rereads the file from disk (with confirmation if modified) or discards it (`arg refresh`) — confirm in the manual.
+- Saving: write to a temp file in the same directory and rename over the original; with `backup:bak`, the previous version is first renamed to `name.bak` (replacing the extension, as the original did — confirm).
+
+### 6.11 Search (M1: plain strings)
+- `arg "text" psearch` searches forward for the literal text; `psearch` without arg repeats the last search; `msearch` searches backward.
+- `case` switch (default off = case-insensitive).
+- Search wraps per the manual (confirm). Found text is highlighted; cursor moves to the match, scrolling with `hike`.
+
+### 6.12 TOOLS.INI
+- **Location** (first found wins): directories listed in the `INIT` environment variable (`;` on Windows, `:` elsewhere) → `%APPDATA%\mep\` (Windows) / `~/.config/mep/` (macOS, Linux; honor `XDG_CONFIG_HOME`) → home directory. File name `TOOLS.INI`, matched case-insensitively on case-sensitive filesystems (`tools.ini` also accepted).
+- **Sections**: `[name]`, several names per tag (`[m mep]`), case-insensitive. The editor reads the section(s) matching its executable name. Tagged variants: implement `[mep-<os>]` with `<os>` = `windows`, `macos`, `linux`, read after the plain section. DOS/OS/2 tags from the original (`[M-3.20]`, `[M-10.0]`, display tags) are ignored.
+- **Lines**: `function:key` (assignment), `name:=sequence` (macro), `switch:value`. Comments start with `;`. Continuation lines per the manual (confirm whether a trailing `\` is supported).
+- Errors in TOOLS.INI are collected and shown on the dialog line after startup; they never abort.
+- `initialize` rereads the editor sections.
+- `assign`: `arg "text" assign` applies one TOOLS.INI-style line at runtime.
+
+### 6.13 Switches for M1
+
+| Switch | Default | M1 |
+|---|---|---|
+| `undocount` | 10 | yes |
+| `displaycursor` | off (status shows window position; on = cursor position) | yes |
+| `tabstops` | 4 | yes |
+| `tabdisp` | 32 | yes |
+| `entab` | 1 | yes (ORACLE TAB-1) |
+| `traildisp` | 0 | yes |
+| `trailspace` | off | yes |
+| `case` | off | yes |
+| `enterinsmode` | off | yes |
+| `softcr` | on | yes (auto-indent on `emacsnewl`/`newline` per manual) |
+| `wordwrap` / `rmargin` | off / 72 | yes |
+| `autosave` | on | yes |
+| `askexit` | off | yes |
+| `backup` | none | yes (`none`, `bak`) |
+| `readonly` | none (text switch: command run before overwriting a read-only file, file name appended; without it the user is asked for a new name) | yes |
+| `vscroll` / `hscroll` / `hike` | 7 / 10 / 4 | yes |
+| `height` / `width` | terminal | yes, only if set |
+| `fgcolor` `hgcolor` `stacolor` `infcolor` `errcolor` | 7 / 70 / 3 / 6 / 4 | yes |
+| `noise` | 50 | accept, use for search progress later |
+| `tmpsav`, `markfile`, `maxmsg`, `extmake`, `askrtn`, `load` | — | accept and store; used in M2–M4 |
+| `vmbuf`, `shortnames`, `savescreen` | — | accept silently, no effect (DOS-era) |
+
+Unknown switch → error message, no abort.
+
+### 6.14 Macros
+- Definition: `name:=item item …`, one per line. Items: function or macro names, quoted strings, flow control.
+- A quoted string is entered as if typed: in arg mode it becomes text argument input; otherwise each character goes through `graphic`.
+- Flow control: `:>label` defines a label; `=>label` jumps; `+>label` jumps if the previous function returned true; `->label` if false. A bare `=>`, `+>` or `->` exits the macro (with the condition).
+- A pending argument is passed to the first function in the macro that accepts arguments. A macro may end with an **open arg**, consumed by whatever runs next (MSJ `selectall` example — must work).
+- The screen is **not redrawn** during macro execution until input is required.
+- The macro's return value is the value of the last function executed (ORACLE: MACRO-1).
+- Macros can call macros. Recursion depth limit 256 → error message.
+- Limit: 1024 macros (as the original), configurable constant.
+- `execute`: `arg "item item …" execute` runs the text as a macro sequence. This is also the `fExecute` callback for extensions (M4).
+
+---
+
+## 7. Front end (`mep-term`, `mep`)
+
+- Enter raw mode and the alternate screen; restore on exit **and on panic** (install a panic hook).
+- Raw mode must stop the terminal from turning Ctrl+C, Ctrl+Z, Ctrl+\, Ctrl+S, Ctrl+Q into signals or flow control: MEP binds several of these. Verify on macOS and Linux.
+- Request keyboard enhancement (kitty protocol: disambiguate escape codes, report alternate keys) when supported. Without it, document the collisions: Ctrl+M = Enter, Ctrl+[ = Esc, Ctrl+H = Backspace, Ctrl+I = Tab; Alt+key arrives as an Esc prefix. Check how crossterm reports Ctrl+J vs Enter in legacy mode.
+- Lone Esc vs. Esc prefix: rely on crossterm's parsing; verify that a single Esc (cancel) reacts without noticeable delay.
+- Key mapping: convert crossterm `KeyEvent` to `mep_core::keys::Key`. Keypad `+`/`-` (`num+`, `num-`) only when the terminal reports them distinctly.
+- Rendering: the core produces a full `Frame`; `mep-term` diffs it against the previous frame and writes only changes. Cursor shape: block in overtype, bar in insert mode (if supported).
+- Resize events → `Event::Resize`.
+- The binary wires `mep-term` + `mep-clip` (`clipboard-rs` adapter; fallback to in-memory if construction fails) into the core.
+
+**Testability split (required for the coverage gate):**
+- `mep-term` is split into pure, tested code and a minimal OS glue file `mep-term/src/sys.rs`:
+  - pure: crossterm `KeyEvent` → `Key` conversion, frame diffing, writing the diff as crossterm commands into any `impl Write` (tests write into a `Vec<u8>` and compare the bytes), DOS attribute → ANSI color mapping, cursor-shape selection;
+  - `sys.rs`: only enabling/disabling raw mode, alternate screen, keyboard enhancement, panic hook installation, `crossterm::event::read()`, `terminal::size()`. No logic, no branches beyond forwarding errors.
+- `mep-clip` is split the same way: payload ↔ clipboard-rs content encoding is pure and tested; `mep-clip/src/system.rs` only constructs the `clipboard-rs` context and calls get/set.
+- `mep/src/main.rs` only collects `std::env::args_os()`, builds the real `Fs`/`Env`/`Terminal`/`SystemClipboard` and calls a library function `run(...)` in `mep/src/lib.rs`, which is tested with fakes.
+- Real `Fs` and `Env` implementations live in `mep/src/os.rs` (thin wrappers around `std::fs`, `std::env`, the clock).
+
+---
+
+## 8. Milestones and tasks
+
+### M1 — Usable daily editor (one window, several files)
+
+Order matters. Every task's "done when" **implicitly includes**: tests green on all three platforms and the coverage gate (§9.1) at 100%.
+
+| # | Task | Done when |
+|---|---|---|
+| 1 | **Workspace setup**: crates, toolchain file (incl. `llvm-tools-preview`), fmt/clippy config, `docs/` structure, `scripts/check` (sh + PowerShell) running fmt, clippy, tests and the coverage gate; CI running the same script on Windows, macOS and Linux. | Empty crates build; the coverage gate runs and passes on all three platforms. |
+| 2 | **Gap buffer** (`gap`). | Unit + property tests: random insert/delete sequences match a `Vec<u8>` model. |
+| 3 | **Line index and terminators** (`lines`, §5.1). | Load→save round-trip byte-exact for LF, CRLF, mixed, no final newline, empty file, invalid UTF-8. |
+| 4 | **Cell model** (`cells`, §3.2, §5.2). | Tests for ASCII, wide CJK, combining marks, invalid bytes, tabs: cell↔byte mapping both directions, box edge splitting a wide char. |
+| 5 | **File table and file I/O** (`file`) on top of the `Fs` trait: load, save via `write_atomic`, `backup:bak`, readonly detection, untitled buffer. Real `Fs` in `mep/src/os.rs`. | Core tests with the in-memory `Fs`, including every injected failure (read error, write error, rename error, readonly); real `Fs` tested against `tempfile` directories. |
+| 6 | **Keys and default keymap** (`keys`, §6.8): key-name parser/printer. | Round-trip of every name in the default table; parser rejects garbage with a message. |
+| 7 | **Switch table** (`switches`, §6.13). | Every switch parses its type; unknown switch → error. |
+| 8 | **View, render, status/dialog lines** (`view`, `render`, §6.2–6.4). | Golden frame tests (text snapshots of `Frame`) for scrolling, hike, resize, status fields. |
+| 9 | **Command table, dispatcher, arg model, meta** (`cmd`, `arg`, §6.5–6.6). | Scenario tests: every arg kind classified correctly; numarg→linearg; invalid-arg message; selection highlight in frame. |
+| 10 | **Movement commands**. | Scenario tests per command from its spec file. |
+| 11 | **Editing commands** incl. insert/overtype, virtual space padding, trailing-space rule, `softcr`, `wordwrap`. | Scenario tests per command. |
+| 12 | **Undo** (§5.7). | Undo/redo of every editing command restores bytes and cursor; `undocount` limit. |
+| 13 | **Clipboard core** (`clip`, §3.3, §6.9): shapes, payload with private record, FNV-1a hash, paste rules, block-delete-to-clipboard, `<clipboard>` pseudo-file. In-memory `SystemClipboard` for tests. | Scenario tests: box/line/stream copy-paste; external text classified by trailing newline; stale private record (hash mismatch) ignored. |
+| 14 | **`mep-clip`**: `clipboard-rs` adapter writing text + custom format in one call; reading both. | Manual test on Windows and macOS: copy a box in MEP, paste into another app (plain text), copy it back, paste in MEP as a box; copy text in another app, paste in MEP as stream/line. |
+| 15 | **Plain search** (§6.11). | Scenario tests: forward, backward, repeat, case switch, not-found message. |
+| 16 | **TOOLS.INI** (`ini`, §6.12) + `assign` + `initialize`. | Tests: location order, section by executable name, `[m mep]`, `[mep-<os>]`, comments, errors collected. |
+| 17 | **Macros** (`macros`, §6.14) + `execute` + `lasttext`. | Tests reproduce the MSJ examples (`savefile`, `print` structure with `shell` stubbed, `bigprint`/`selectall` open-arg chain), jumps, labels, recursion limit. |
+| 18 | **Multiple files** (§6.10): file list from CLI, `setfile` variants, `autosave`, `exit` walking the list, `refresh`, `askexit`. | Scenario tests. |
+| 19 | **Text insertion functions** (`curdate` …). | Tests with injected clock/env. |
+| 20 | **Front end** (§7) and binary wiring, CLI (§6.1). | Key conversion, frame diff and color mapping fully unit-tested; `run(...)` tested with fakes; every CLI case tested (each option short/long/Windows form, `--execute=`, repeated `-e`, `--`, bundling error, unknown option, missing argument, help, version). Manual checklist below passes on Windows Terminal, macOS Terminal/iTerm2/Ghostty, a Linux terminal. |
+
+**M1 acceptance:**
+- `scripts/check` passes on Windows, macOS and Linux, including the coverage gate at 100% lines, functions and regions.
+- Every command spec file in `docs/spec/commands/` has scenario tests for every accepted arg kind, the `meta` form, and at least one rejected arg kind.
+- Every switch in §6.13 has tests for its default, a valid value, and an invalid value.
+- Every key name in the default table round-trips through parser and printer.
+
+**M1 acceptance checklist (manual, owner):**
+- Open, edit, save a C++ and a Rust file; CRLF file stays CRLF; unedited lines unchanged (`git diff` shows only edited lines).
+- Box copy → paste into a browser text field; text copied in a browser → paste in MEP.
+- All six arg kinds and `meta` behave per manual on Windows and macOS.
+- A TOOLS.INI with key assignments and a macro using `+>`/`->` works.
+- Resize the terminal while editing; nothing breaks.
+- Ctrl+C / Ctrl+Z / Ctrl+\ do not kill or suspend the editor.
+
+### M2 — Regex, replace, marks
+- Regex dialect (§10): parser for the MEP syntax → translation to `regex`/`fancy-regex`, or own matcher if semantics don't map. Standalone module with its own test suite (cases from both manuals).
+- `arg arg` forms of `psearch`/`msearch`.
+- `replace`, `qreplace` with tagged groups `$0`–`$9`.
+- `mark` and `markarg` (conversion in the dispatcher), `markfile` switch (persisted marks).
+
+### M3 — Windows and sessions
+- `window`: up to 8 tiled windows, minimum 5 rows × 10 columns; horizontal/vertical split (ORACLE S10 for naming).
+- Information file (`<information>` pseudo-file, file history), reopen last file on start, `tmpsav` session restore, `-t` flag.
+- Remaining clipboard adapters: Wayland (via `clipboard-rs` feature), X11, OSC 52 for remote sessions.
+
+### M4 — Tools and extensions
+- `arg arg !textarg paste` / `arg arg !streamarg paste`: run the text as a command and insert its stdout at the initial cursor position (M guide p. 102).
+- `shell`, `compile`, `argcompile` via a background job queue (threads + channels); `askrtn`; compiler-output parsing and error browsing (`compile` without arg steps to the next error; `meta compile`, `arg meta compile`, `maxmsg`).
+- `extmake` switch.
+- Extension ABI crate: `#[repr(C)]` `ARG`, `cmdDesc`, `swiDesc`; required exports `cmdTable`, `swiTable`, `WhenLoaded`; the callback set from MSJ Fig. 7 (`AddFile`, `BadArg`, `CopyBox`, `CopyLine`, `CopyStream`, `DelBox`, `DelFile`, `DelLine`, `DelStream`, `DoMessage`, `Display`, `fExecute`, `FileLength`, `FileNameToHandle`, `FileRead`, `FileWrite`, `GetCursor`, `GetLine`, `KbHook`, `KbUnHook`, `MoveCur`, `pFileToTop`, `PutLine`, `RemoveFile`, `ReadChar`, `ReadCmd`, `Replace`, `SetKey`) as `extern "C"`. PFILE = opaque handle wrapping `FileId`. `load:` switch loads via `libloading`. Acceptance: the MSJ `filter` extension, ported to modern C with a provided `ext.h`, compiles and works (sorting a line range through `sort`).
+
+---
+
+## 9. Testing strategy
+
+### 9.1 Coverage gate (hard acceptance criterion)
+
+The gate is part of `scripts/check` and CI and runs on **each** platform separately (platform-specific `cfg` code is covered on its own platform):
+
+```
+cargo llvm-cov --workspace \
+  --ignore-filename-regex '(mep-term[/\\]src[/\\]sys\.rs|mep-clip[/\\]src[/\\]system\.rs|mep[/\\]src[/\\]main\.rs)$' \
+  --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
+```
+
+Rules:
+- **Exclusions are exactly these three files** (§7). They contain only calls into the OS, no logic. Adding a file to the list requires the owner's OK. The Linux clipboard path in `system.rs` is additionally exercised by an `#[ignore]` integration test run manually.
+- 100% **lines, functions and regions**. Branch coverage is not available on stable Rust and is not gated.
+- No `unreachable!()` / `todo!()` / `unimplemented!()` arms in non-test code: they are uncovered regions by definition. Express invariants through types instead.
+- Every error path is reached by a test: I/O failures through the in-memory `Fs`, clipboard failures through a failing fake `SystemClipboard`, terminal write failures through a failing `impl Write`.
+- Tests assert behavior, not just execution: a test that runs code without checking its result does not count as coverage in review.
+- A coverage report (`cargo llvm-cov --html`) is produced by `scripts/check --report` for finding gaps.
+
+### 9.2 Unit and property tests
+Per module. Property tests (`proptest`) for the gap buffer, line index, cell mapping, key-name round-trip and the CLI parser.
+
+### 9.3 Scenario tests
+A small text format in `tests/scenarios/*.mep-test`, run by a test harness in `mep-core` (no terminal):
+
+```
+== name: ldelete with linearg
+-- tools.ini
+[mep]
+-- file a.txt
+alpha
+beta
+gamma
+-- keys
+down arg down ldelete
+-- expect file a.txt
+alpha
+-- expect cursor 1 0
+-- expect clipboard line
+beta
+gamma
+```
+
+Keys are given as function names (as in macros) or key names (`alt+a`). Optional sections: `expect frame` (text snapshot), `expect message`, `expect status`. Write the harness in task 9 and use it from then on.
+
+### 9.4 Platform tests
+File I/O and line endings run on all three OSes. The clipboard adapter has an `#[ignore]` integration test for manual runs on a desktop session.
+
+### 9.5 Oracle confirmation
+`docs/oracle.md` lists each ORACLE item with: manual text, chosen behavior, and a key sequence the owner can run in a real MEP to confirm. ORACLE tests are **active** (not ignored) and assert the manual's reading, so the coverage gate holds. If the real binary behaves differently, the owner records the result and both test and code are changed.
+
+---
+
+## 10. Regex dialect (for M2, shared with Z)
+
+`\` escape, `?` any char, `[..]` class, `[~..]` negated class, `^` / `$` anchors, `X*` and `X+` **minimal** repetition, `X@` and `X#` **maximal** repetition, `(a!b!c)` alternation tried left to right with backtracking, `~X` not-X, `X^n` exactly n times, `{..}` tag groups → `$0`–`$9` in replacements, predefined `:a :b :c :d :f :h :i :n :p :q :w :z`. `arg arg` = regex, single `arg` = literal.
+
+Known manual errors to **not** copy (from the Z guide): "X+ is shorthand for XX+" (means XX*); `:h` is `[0-9a-fA-F]#` (M's fix). Confirm each predefined class against the M guide.
+
+---
+
+## 11. ORACLE items (confirm against a real MEP)
+
+| ID | Question | Implement per |
+|---|---|---|
+| S3 | `arg numarg mark`: line numbers 0-based? | M guide (0-based) |
+| S4 | `mpara`: lands on first blank line preceding the paragraph? | M guide |
+| S5 | `arg arg textarg paste` (file insert): at cursor or above current line? | M guide Ch. 4 (at cursor) |
+| S6 | `arg markarg replace`: stream or box? | M guide (box) |
+| S10 | `arg window` / `arg arg window`: which is horizontal/vertical? | M guide wording; confirm |
+| TAB-1 | File tab width 8; exact `entab` values | §5.2 |
+| UNDO-1 | Macro = one undo step? | §5.7 |
+| MACRO-1 | Macro return value = last function's value? | §6.14 |
+
+Available oracles: the existing Windows 11 MEP port, M for DOS / MEP for OS/2 under emulation.
+
+---
+
+## 12. Known traps
+
+- **INIT, not USER**: TOOLS.INI search path comes from `INIT`. Never read `USER` as a directory list (on Unix it is the login name).
+- **Terminal key collisions**: see §7. Test with and without keyboard enhancement.
+- **Signals and flow control**: Ctrl+C (ppage), Ctrl+Z (plines), Ctrl+\ (qreplace), Ctrl+S (left) are editor keys.
+- **Byte-exact round-trip**: never normalize unedited lines (terminators, tabs, trailing spaces, invalid UTF-8).
+- **No 250-char line limit.**
+- **Status line is 1-based, internals 0-based.**
+- **Executable name** decides the TOOLS.INI section: get it from `std::env::args_os().next()` (file stem, case-insensitive), not from `current_exe()`. Started through a link `mz → mep`, `args_os().next()` is `mz` (the name typed), while `current_exe()` resolves the link to `.../mep`. Using the typed name keeps the original rule: a link named `mz` reads `[mz]`. If `args_os()` is empty, fall back to `mep`.

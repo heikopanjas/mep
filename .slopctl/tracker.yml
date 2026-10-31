@@ -1,0 +1,112 @@
+AGENTS.md:
+  original_sha: 9011b072a79e5c006b64254a2907e897c84eaf2332f13a1505b2a5159c2bc154
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.959738+00:00
+  lang:
+  - rust
+  agent:
+  - claude
+  ref_count: 2
+  category: main
+.claude/skills/rust-build-commands/SKILL.md:
+  original_sha: 0f9f73b10a919afc81f5dfe6b782ee28bd802583eada5a9b7a5b1b7c1391449d
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.960770+00:00
+  lang:
+  - rust
+  agent: []
+  ref_count: 1
+  category: skill
+  origin: slopctl-starter
+.editorconfig:
+  original_sha: 2cdf8de1f750e1c41bb875838dc70caa8dc99b06def6caff7a61bbcb201d59fb
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.960053+00:00
+  lang:
+  - rust
+  agent: []
+  ref_count: 1
+  category: language
+  origin: slopctl-starter
+UPDATES.md:
+  original_sha: ff56fd563cb60b9073230b3b0721e5687c98fd7888129b47f2bbc557e9c9c940
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.960158+00:00
+  lang: []
+  agent: []
+  ref_count: 0
+  category: integration
+  origin: slopctl-starter
+.claude/commands/init-session.md:
+  original_sha: 0d2fd81c4fbae776c4b4f050bd0394e913796c6e597297487ca34d8e78ec5d7d
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.960411+00:00
+  lang: []
+  agent:
+  - claude
+  ref_count: 1
+  category: agent
+  origin: slopctl-starter
+.claude/skills/rust-coding-conventions/SKILL.md:
+  original_sha: 35c301f0d83f09e5259b500e910c858dc4a5f687d433476a0e7b53f9935a31c1
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.960619+00:00
+  lang:
+  - rust
+  agent: []
+  ref_count: 1
+  category: skill
+  origin: slopctl-starter
+.claude/skills/git-workflow/SKILL.md:
+  original_sha: e77221a6957de986cdd456c69f80d4009ac8bf5e118a3e926c47260746ae92be
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.960916+00:00
+  lang:
+  - rust
+  agent:
+  - claude
+  ref_count: 2
+  category: skill
+  origin: slopctl-starter
+.claude/skills/recent-updates/SKILL.md:
+  original_sha: 27fbb14192738a4e76042bf7322b4b529f4996354fa427700624deccd3ef6dc9
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.961222+00:00
+  lang:
+  - rust
+  agent:
+  - claude
+  ref_count: 2
+  category: skill
+  origin: slopctl-starter
+.rustfmt.toml:
+  original_sha: 56d331abd13694029c81488026f0f525b2cd8acc4392e64d8d9b5da57a177b6c
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.959946+00:00
+  lang:
+  - rust
+  agent: []
+  ref_count: 1
+  category: language
+  origin: slopctl-starter
+.claude/skills/semantic-versioning/SKILL.md:
+  original_sha: d313d5c1a851aaf9b8cebc250e280cbe37bc70fdb06d95f74de6b60eafdf5f4d
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.961071+00:00
+  lang:
+  - rust
+  agent:
+  - claude
+  ref_count: 2
+  category: skill
+  origin: slopctl-starter
+CLAUDE.md:
+  original_sha: eb7e86a5cd044d553afc7d464e33eea906f229a5637979cde2e864e0cf573cfa
+  template_version: 5
+  installed_date: 2026-10-31T20:56:12.960255+00:00
+  lang: []
+  agent:
+  - claude
+  ref_count: 1
+  category: agent
+  origin: slopctl-starter
