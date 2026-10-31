@@ -21,10 +21,32 @@ macro_rules! require {
     };
 }
 
+pub mod cells;
+pub mod clip;
+mod cmd;
+mod commands;
+mod edit;
+pub mod editor;
+pub mod env;
+pub mod file;
+pub mod frame;
 mod gap;
+pub mod ini;
+pub mod io;
+pub mod keys;
+mod lines;
+pub mod macros;
+pub mod memfs;
+mod render;
+pub mod switches;
+mod text;
+pub mod view;
 
 pub use anyhow::Result;
+pub use cmd::is_function;
+pub use editor::{Editor, Event, Outcome, Startup};
 pub use gap::GapBuffer;
+pub use text::{Terminator, Text};
 
 /// Returns the MEP version shared by all workspace crates
 pub fn version() -> &'static str

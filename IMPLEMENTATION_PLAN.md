@@ -75,7 +75,24 @@ All in `docs/sources/` (see `docs/sources/README.md` for conventions):
 - Own **byte-based gap buffer** (not `ropey`, which requires valid UTF-8).
 - `crossterm` for terminal I/O on all platforms; `clipboard-rs` for the system clipboard; `libloading` for extensions (M4).
 - Extensions use a **C ABI** (M4) so they can be written in C like the originals.
-- Child processes and background jobs via `std::process`, threads and channels (M4). The core is single-threaded and deterministic.
+- Child processes and background jobs via `std::process`, threads and channels (M4).
+
+### 3.5 Concurrency and large documents
+
+**Goal: the editor never slows down or freezes on large documents.** Reference document: 100 MB, 2 million lines.
+
+- **Deterministic core, concurrent edges.** `mep-core` stays a single-threaded state machine: commands run one after another, so undo, macros, the arg model and scenario tests stay deterministic. Everything that waits runs on worker threads around it.
+- **Threads and channels, no async runtime.** Workers are `std::thread` with `std::sync::mpsc` channels. The editor has a handful of long-lived workers, which threads handle well; an async runtime (tokio) adds a large dependency without making large documents faster.
+- **Workers:** terminal input (`mep-term`), rendering (frame diff and terminal writes, `mep-term`), file I/O (load, save, backup), system clipboard (`mep-clip`; X11 reads can block), background jobs (M4).
+- **The core never blocks on I/O.** A command that needs I/O (`setfile` loading a file, saving, `refresh`, `paste` reading the system clipboard) emits a **request** and **suspends**. While suspended, the editor keeps rendering, shows progress on the dialog line, queues typed keys (type-ahead) and lets Esc cancel. The worker's result arrives as a **completion event**; the command then finishes and returns its `bool` as usual. The macro interpreter is resumable (explicit state, not native recursion), so a macro waits at that step and continues with the command's result.
+- **Long-running core work runs in bounded slices**, e.g. a search scans a fixed number of bytes per step. Between steps the editor handles events, so input stays responsive and Esc cancels. The slice size is a constant; tests use a small one.
+- **Size rule: the cost of an edit depends on the size of the edit, not the size of the file.**
+  - edits at the cursor are gap buffer operations (§4.4 `gap`);
+  - the line index is updated incrementally, never rebuilt per edit (§4.4 `lines`);
+  - rendering reads only the visible lines; the status line's line count is O(1);
+  - undo records deltas (position, removed bytes, inserted bytes), never copies of the buffer;
+  - whole-file passes happen only on load, save, search and explicit whole-file commands.
+- **Saving** hands an owned copy of the bytes to the I/O worker (one copy in memory, no disk I/O on the core thread).
 
 ---
 
@@ -132,10 +149,10 @@ pub trait Env {                                   // environment and clock
     fn os(&self) -> Os;                           // Windows / MacOs / Linux
 }
 
-pub enum Event { Key(Key), Resize(u16, u16) }
+pub enum Event { Key(Key), Resize(u16, u16), Completed(Completion) } // Completion: a worker's result for a request (§3.5)
 ```
 
-The editor is a state machine: `Editor::handle(event) -> Outcome` (`Continue` / `Quit`), then `Editor::render(&mut Frame)`. The binary owns the loop: read event from `mep-term` → `handle` → `render` → `Terminal::draw`. Tests use an in-memory clipboard, an in-memory `Fs` with injectable failures (so every I/O error path is testable), a fixed `Env`, and render into a `Frame` without any terminal. `mep-core` never calls `std::fs`, `std::env` or the system clock directly.
+The editor is a state machine: `Editor::handle(event) -> Outcome` (`Continue` / `Quit`, plus the requests for workers that the event produced), then `Editor::render(&mut Frame)`. The binary owns the loop: receive the next event from the input thread or a worker → `handle` → dispatch requests to workers → `render` → hand the frame to the render thread (§3.5). The `Fs` and `SystemClipboard` traits are called by the workers, not by the core thread. Tests use an in-memory clipboard, an in-memory `Fs` with injectable failures (so every I/O error path is testable), a fixed `Env`, and render into a `Frame` without any terminal. `mep-core` never calls `std::fs`, `std::env` or the system clock directly.
 
 ### 4.3 Allowed crates
 
@@ -162,7 +179,7 @@ Tool (not a crate dependency): `cargo-llvm-cov` for coverage measurement and the
 | Module | Responsibility |
 |---|---|
 | `gap` | `GapBuffer`: byte storage, insert/delete at byte offset, slice access. |
-| `lines` | Line index over the gap buffer (line start offsets), line terminator per line. |
+| `lines` | Line index over the gap buffer (line start offsets), line terminator per line; updated incrementally on edits (§3.5). |
 | `cells` | UTF-8 decoding with invalid-byte handling, cell widths, cell column ↔ byte offset, tab expansion, placeholder rendering. |
 | `file` | `File` (one open file or pseudo-file), `FileTable` with `FileId` handles, load/save, line-ending detection, modified/readonly flags, backup. |
 | `view` | Window state: top line, left column, cursor (line, cell col); scrolling rules. |
@@ -173,7 +190,7 @@ Tool (not a crate dependency): `cargo-llvm-cov` for coverage measurement and the
 | `switches` | Switch table (name, type, default, setter), validation, messages. |
 | `ini` | TOOLS.INI locating and parsing, section selection, tags. |
 | `macros` | Macro definitions, parser, interpreter (labels, jumps, return values). |
-| `undo` | Per-file undo records, `undocount`. |
+| `undo` | Per-file undo records as deltas (§3.5), `undocount`. |
 | `clip` | Clipboard model: shape + content, conversion to/from `ClipboardPayload`, the paste-shape rules. |
 | `render` | Builds the `Frame`: text area, dialog line, status line, colors. |
 | `editor` | Top-level `Editor`: file table, current file, view, arg state, keymap, macros, switches, message line. |
@@ -412,6 +429,7 @@ Unknown switch → error message, no abort.
 - Key mapping: convert crossterm `KeyEvent` to `mep_core::keys::Key`. Keypad `+`/`-` (`num+`, `num-`) only when the terminal reports them distinctly.
 - Rendering: the core produces a full `Frame`; `mep-term` diffs it against the previous frame and writes only changes. Cursor shape: block in overtype, bar in insert mode (if supported).
 - Resize events → `Event::Resize`.
+- Threads (§3.5): an input thread runs the blocking `crossterm::event::read()` loop and sends events into the main channel; a render thread receives frames, drops all but the newest when it falls behind, diffs and writes. I/O and clipboard workers receive requests and send completions into the same channel.
 - The binary wires `mep-term` + `mep-clip` (`clipboard-rs` adapter; fallback to in-memory if construction fails) into the core.
 
 **Testability split (required for the coverage gate):**
@@ -421,6 +439,7 @@ Unknown switch → error message, no abort.
 - `mep-clip` is split the same way: payload ↔ clipboard-rs content encoding is pure and tested; `mep-clip/src/system.rs` only constructs the `clipboard-rs` context and calls get/set.
 - `mep/src/main.rs` only collects `std::env::args_os()`, builds the real `Fs`/`Env`/`Terminal`/`SystemClipboard` and calls a library function `run(...)` in `mep/src/lib.rs`, which is tested with fakes.
 - Real `Fs` and `Env` implementations live in `mep/src/os.rs` (thin wrappers around `std::fs`, `std::env`, the clock).
+- Worker loops are plain functions over channels and trait objects, so tests drive them with fake `Fs`, `SystemClipboard` and `impl Write` and no real terminal or OS clipboard.
 
 ---
 
@@ -434,30 +453,31 @@ Order matters. Every task's "done when" **implicitly includes**: tests green on 
 |---|---|---|
 | 1 | **Workspace setup**: crates, toolchain file (incl. `llvm-tools-preview`), fmt/clippy config, `docs/` structure, `scripts/check.sh` and `scripts/check.ps1` running fmt, clippy, tests and the coverage gate; CI running the same script on Windows, macOS and Linux. | Empty crates build; the coverage gate runs and passes on all three platforms. |
 | 2 | **Gap buffer** (`gap`). | Unit + property tests: random insert/delete sequences match a `Vec<u8>` model. |
-| 3 | **Line index and terminators** (`lines`, §5.1). | Load→save round-trip byte-exact for LF, CRLF, mixed, no final newline, empty file, invalid UTF-8. |
+| 3 | **Line index and terminators** (`lines`, §5.1), updated incrementally on edits (§3.5). | Load→save round-trip byte-exact for LF, CRLF, mixed, no final newline, empty file, invalid UTF-8; property test: index after random edits equals a full rebuild. |
 | 4 | **Cell model** (`cells`, §3.2, §5.2). | Tests for ASCII, wide CJK, combining marks, invalid bytes, tabs: cell↔byte mapping both directions, box edge splitting a wide char. |
-| 5 | **File table and file I/O** (`file`) on top of the `Fs` trait: load, save via `write_atomic`, `backup:bak`, readonly detection, untitled buffer. Real `Fs` in `mep/src/os.rs`. | Core tests with the in-memory `Fs`, including every injected failure (read error, write error, rename error, readonly); real `Fs` tested against `tempfile` directories. |
+| 5 | **File table and file I/O** (`file`) on top of the `Fs` trait: load, save via `write_atomic`, `backup:bak`, readonly detection, untitled buffer. Load and save are requests with completion events (§3.5). Real `Fs` in `mep/src/os.rs`. | Core tests with the in-memory `Fs`, including every injected failure (read error, write error, rename error, readonly); real `Fs` tested against `tempfile` directories. |
 | 6 | **Keys and default keymap** (`keys`, §6.8): key-name parser/printer. | Round-trip of every name in the default table; parser rejects garbage with a message. |
 | 7 | **Switch table** (`switches`, §6.13). | Every switch parses its type; unknown switch → error. |
-| 8 | **View, render, status/dialog lines** (`view`, `render`, §6.2–6.4). | Golden frame tests (text snapshots of `Frame`) for scrolling, hike, resize, status fields. |
+| 8 | **View, render, status/dialog lines** (`view`, `render`, §6.2–6.4). Rendering reads only visible lines (§3.5). | Golden frame tests (text snapshots of `Frame`) for scrolling, hike, resize, status fields. |
 | 9 | **Command table, dispatcher, arg model, meta** (`cmd`, `arg`, §6.5–6.6). | Scenario tests: every arg kind classified correctly; numarg→linearg; invalid-arg message; selection highlight in frame. |
 | 10 | **Movement commands**. | Scenario tests per command from its spec file. |
 | 11 | **Editing commands** incl. insert/overtype, virtual space padding, trailing-space rule, `softcr`, `wordwrap`. | Scenario tests per command. |
-| 12 | **Undo** (§5.7). | Undo/redo of every editing command restores bytes and cursor; `undocount` limit. |
-| 13 | **Clipboard core** (`clip`, §3.3, §6.9): shapes, payload with private record, FNV-1a hash, paste rules, block-delete-to-clipboard, `<clipboard>` pseudo-file. In-memory `SystemClipboard` for tests. | Scenario tests: box/line/stream copy-paste; external text classified by trailing newline; stale private record (hash mismatch) ignored. |
+| 12 | **Undo** (§5.7), storing deltas (§3.5). | Undo/redo of every editing command restores bytes and cursor; `undocount` limit. |
+| 13 | **Clipboard core** (`clip`, §3.3, §6.9): shapes, payload with private record, FNV-1a hash, paste rules, block-delete-to-clipboard, `<clipboard>` pseudo-file. Clipboard reads and writes are requests with completion events (§3.5). In-memory `SystemClipboard` for tests. | Scenario tests: box/line/stream copy-paste; external text classified by trailing newline; stale private record (hash mismatch) ignored. |
 | 14 | **`mep-clip`**: `clipboard-rs` adapter writing text + custom format in one call; reading both. | Manual test on Windows and macOS: copy a box in MEP, paste into another app (plain text), copy it back, paste in MEP as a box; copy text in another app, paste in MEP as stream/line. |
-| 15 | **Plain search** (§6.11). | Scenario tests: forward, backward, repeat, case switch, not-found message. |
+| 15 | **Plain search** (§6.11), running in bounded slices (§3.5). | Scenario tests: forward, backward, repeat, case switch, not-found message, Esc cancels a running search. |
 | 16 | **TOOLS.INI** (`ini`, §6.12) + `assign` + `initialize`. | Tests: location order, section by executable name, `[m mep]`, `[mep-<os>]`, comments, errors collected. |
-| 17 | **Macros** (`macros`, §6.14) + `execute` + `lasttext`. | Tests reproduce the MSJ examples (`savefile`, `print` structure with `shell` stubbed, `bigprint`/`selectall` open-arg chain), jumps, labels, recursion limit. |
+| 17 | **Macros** (`macros`, §6.14) + `execute` + `lasttext`. Resumable interpreter (§3.5). | Tests reproduce the MSJ examples (`savefile`, `print` structure with `shell` stubbed, `bigprint`/`selectall` open-arg chain), jumps, labels, recursion limit, a macro suspended at a file load continuing with the command's result. |
 | 18 | **Multiple files** (§6.10): file list from CLI, `setfile` variants, `autosave`, `exit` walking the list, `refresh`, `askexit`. | Scenario tests. |
 | 19 | **Text insertion functions** (`curdate` …). | Tests with injected clock/env. |
-| 20 | **Front end** (§7) and binary wiring, CLI (§6.1). | Key conversion, frame diff and color mapping fully unit-tested; `run(...)` tested with fakes; every CLI case tested (each option short/long form, a `/`-prefixed argument treated as a file, `--execute=`, repeated `-e`, `--`, bundled short flags, unknown option, missing argument, help, version). Manual checklist below passes on Windows Terminal, macOS Terminal/iTerm2/Ghostty, a Linux terminal. |
+| 20 | **Front end** (§7) and binary wiring, CLI (§6.1), input/render/I/O/clipboard threads (§3.5). | Key conversion, frame diff and color mapping fully unit-tested; worker loops tested with fakes; `run(...)` tested with fakes; every CLI case tested (each option short/long form, a `/`-prefixed argument treated as a file, `--execute=`, repeated `-e`, `--`, bundled short flags, unknown option, missing argument, help, version). Manual checklist below passes on Windows Terminal, macOS Terminal/iTerm2/Ghostty, a Linux terminal. |
 
 **M1 acceptance:**
 - The check scripts pass on Windows, macOS and Linux, including the coverage gate at 100% lines, functions, regions and branches.
 - Every command spec file in `docs/spec/commands/` has scenario tests for every accepted arg kind, the `meta` form, and at least one rejected arg kind.
 - Every switch in §6.13 has tests for its default, a valid value, and an invalid value.
 - Every key name in the default table round-trips through parser and printer.
+- The performance tests (§9.6) meet their budgets on the reference document.
 
 **M1 acceptance checklist (manual, owner):**
 - Open, edit, save a C++ and a Rust file; CRLF file stays CRLF; unedited lines unchanged (`git diff` shows only edited lines).
@@ -534,13 +554,20 @@ beta
 gamma
 ```
 
-Keys are given as function names (as in macros) or key names (`alt+a`). Optional sections: `expect frame` (text snapshot), `expect message`, `expect status`. Write the harness in task 9 and use it from then on.
+Keys are given as function names (as in macros) or key names (`alt+a`). Optional sections: `expect frame` (text snapshot), `expect message`, `expect status`. Write the harness in task 9 and use it from then on. The harness completes worker requests immediately against its in-memory `Fs` and clipboard; an optional `hold` directive keeps a request pending so tests can check the suspended state (rendering, type-ahead, Esc).
 
 ### 9.4 Platform tests
 File I/O and line endings run on all three OSes. The clipboard adapter has an `#[ignore]` integration test for manual runs on a desktop session.
 
 ### 9.5 Oracle confirmation
 `docs/oracle.md` lists each ORACLE item with: manual text, chosen behavior, and a key sequence the owner can run in a real MEP to confirm. ORACLE tests are **active** (not ignored) and assert the manual's reading, so the coverage gate holds. If the real binary behaves differently, the owner records the result and both test and code are changed.
+
+### 9.6 Performance tests
+`#[ignore]` tests built in release mode (`cargo test --release -- --ignored perf_`), run manually and before each milestone acceptance; timing is too noisy for the CI gate. They generate the reference document (§3.5) and measure with `std::time::Instant`:
+- load into the buffer and line index: under 1 s;
+- each of: insert a character, delete a character, move to the last line, page down, render a frame, at the start, middle and end of the document: under 16 ms (one frame at 60 Hz);
+- one search slice: under 16 ms;
+- the core thread is never blocked by file or clipboard I/O (checked with a fake `Fs` that blocks until released).
 
 ---
 

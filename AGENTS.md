@@ -109,6 +109,8 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - **Core isolation**: `mep-core` holds all editor logic, has `#![forbid(unsafe_code)]`, and never touches `std::fs`, `std::env`, the clock, the terminal or the OS clipboard directly; it goes through the `Terminal`, `SystemClipboard`, `Fs` and `Env` traits
 - **OS glue files** (`mep-term/src/sys.rs`, `mep-clip/src/system.rs`, `mep/src/main.rs`) contain only calls into the OS, no logic
 - **Dependencies**: only the crates listed in `IMPLEMENTATION_PLAN.md` §4.3, which include `anyhow` and `clap`. Any other crate, runtime or dev, needs a one-line justification and the owner's OK. FNV-1a 64 is implemented in-house. A crate is added to a `Cargo.toml` only when code first uses it
+- **Large documents** (`IMPLEMENTATION_PLAN.md` §3.5): the editor must never slow down or freeze on large files. The core stays a deterministic single-threaded state machine; input, rendering, file I/O, clipboard and jobs run on `std::thread` workers with `mpsc` channels (no async runtime). Commands that need I/O suspend and resume on a completion event. The cost of an edit depends on the size of the edit, not the size of the file
+- **Local time**: `curdate`/`curtime` read `/etc/localtime` or `TZ` with the TZif parser in `crates/mep/src/tz.rs` (no time crate); Windows falls back to UTC until a solution is approved
 - **Byte-exact round trip**: never normalize unedited lines (terminators, tabs, trailing spaces, invalid UTF-8)
 - **Small commits**: each one builds and passes the check script
 - **Script names**: shell scripts for Linux and macOS end in `.sh`, PowerShell scripts for Windows in `.ps1`
@@ -132,6 +134,9 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - No `unreachable!()`, `todo!()` or `unimplemented!()` in non-test code; express invariants through types
 - Every error path is reached by a test through in-memory fakes (`Fs` with injectable failures, failing `SystemClipboard`, failing `impl Write`)
 - Tests assert behavior, not just execution
+- Scenario tests: format documented at the top of `crates/mep-core/tests/scenarios.rs`; `~` marks an empty body line, `key:NAME` forces a key event when NAME is also a function, `-- fail`, `-- inject`, `hold`/`-- release` reach I/O error and suspension paths
+- Coverage across test binaries: unit tests and the scenario harness build separate copies of `mep-core`, and the gate takes each function's best copy. A function the scenarios call must be fully covered by scenarios; a fallback that scenarios cannot reach belongs in a separate function covered by unit tests
+- Avoid generic parameters (`impl Fn`, `W: Write`) on functions whose tests pass different types: each instantiation is measured on its own. Use `&mut dyn FnMut` or `Box<dyn Write>`
 - Testing framework: built-in `cargo test`, `proptest`, `tempfile`
 - `proptest-regressions/` files from real failures are committed; seeds produced only by placeholder code during the red phase of test-first work are deleted
 
@@ -162,6 +167,7 @@ Project overrides of the skill:
 ## Commit Protocol
 
 - **NEVER commit automatically** — always wait for explicit user confirmation
+- This includes the end of every plan task: finish the task, summarize it, then stop and wait for the owner's commit instruction. An earlier request to commit after each task does not carry over
 - Stage changes, write a conventional commits message (max 50-char subject, 72-char body lines), then commit
 - Load the `git-workflow` skill for the full message format, character limits, and examples before committing
 - Never add co-authorship trailers or any attribution naming an AI coding agent to commit messages

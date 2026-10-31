@@ -1,0 +1,224 @@
+== name: ldelete with linearg (plan §9.3 example)
+-- file a.txt
+alpha
+beta
+gamma
+-- args a.txt
+-- keys
+down arg down ldelete
+-- expect file a.txt
+alpha
+-- expect cursor 1 0
+-- expect clipboard line
+beta
+gamma
+-- expect result true
+
+== name: arg starts arg mode and keeps the cursor
+-- keys
+arg
+-- expect cursor 0 0
+-- expect result true
+
+== name: arg arg counts two (copy behaves like arg)
+-- file a.txt
+one two
+-- args a.txt
+-- keys
+arg arg copy
+-- expect clipboard stream
+one two
+
+== name: nullarg reaches the function
+-- file a.txt
+one two
+-- args a.txt
+-- keys
+right right right right arg copy
+-- expect clipboard stream
+two
+
+== name: textarg is typed on the dialog line
+-- size 60 8
+-- keys
+arg "hello"
+-- expect frame
+
+
+
+
+
+
+Arg: hello
+<untitled> (text NL) Length=1  Window=(1,1)
+
+== name: numarg becomes linearg
+-- file a.txt
+1
+2
+3
+4
+-- args a.txt
+-- keys
+arg "2" ldelete
+-- expect file a.txt
+3
+4
+-- expect clipboard line
+1
+2
+
+== name: number for a function without numarg is text
+-- file a.txt
+x
+-- args a.txt
+-- keys
+arg "10" paste
+-- expect file a.txt
+10x
+
+== name: zero numarg is invalid
+-- file a.txt
+x
+-- args a.txt
+-- keys
+arg "0" ldelete
+-- expect message Invalid argument
+-- expect result false
+-- expect file a.txt
+x
+
+== name: streamarg on one line
+-- file a.txt
+abcdef
+-- args a.txt
+-- keys
+right arg right right right copy
+-- expect clipboard stream
+bcd
+
+== name: streamarg leftward is the same stream
+-- file a.txt
+abcdef
+-- args a.txt
+-- keys
+right right right right arg left left left copy
+-- expect clipboard stream
+bcd
+
+== name: linearg same column different lines
+-- file a.txt
+one
+two
+three
+-- args a.txt
+-- keys
+arg down down copy
+-- expect clipboard line
+one
+two
+three
+
+== name: boxarg other line and column, right edge exclusive
+-- file a.txt
+abcdef
+ghijkl
+mnopqr
+-- args a.txt
+-- keys
+right arg down down right right copy
+-- expect clipboard box 2
+bc
+hi
+no
+
+== name: invalid argument message and arg mode ends
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+arg "text" ldelete
+-- expect message Invalid argument
+-- expect result false
+-- keys
+copy
+-- expect clipboard line
+abc
+
+== name: selection is highlighted in the frame
+-- file a.txt
+abcdef
+-- args a.txt
+-- size 60 4
+-- keys
+arg right right
+-- expect frame
+abcdef
+
+
+/work/a.txt (text NL) Length=1  Window=(1,1)
+
+== name: cancel ends arg mode with a message
+-- keys
+arg cancel
+-- expect message Argument cancelled
+-- expect result true
+
+== name: cancel without argument returns true
+-- keys
+cancel
+-- expect message
+-- expect result true
+
+== name: meta toggles and returns the new state
+-- keys
+meta
+-- expect result true
+-- keys
+meta
+-- expect result false
+
+== name: meta survives arg and reaches the function
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+right right meta arg begline
+-- expect cursor 0 0
+
+== name: unassigned key reports its name and keeps the argument
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+arg right alt+p
+-- expect message alt+p is not assigned to any editor function
+-- expect result false
+-- keys
+copy
+-- expect clipboard stream
+a
+
+== name: unassigned called by name
+-- keys
+unassigned
+-- expect message unassigned is not assigned to any editor function
+
+== name: a one-line selection for a function without stream or box forms is invalid
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+arg right setwindow
+-- expect message Invalid argument
+
+== name: text argument sdelete at the end and right without previous text
+-- keys
+arg "ab" sdelete copy
+-- expect clipboard stream
+ab
+
+== name: right past the end without a previous text fails
+-- keys
+arg "x" right
+-- expect result false

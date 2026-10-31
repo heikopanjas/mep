@@ -1,0 +1,867 @@
+== name: graphic overtypes by default
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+"xy"
+-- expect file a.txt
+xyc
+-- expect cursor 0 2
+-- expect result true
+
+== name: graphic inserts in insert mode
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+insertmode "xy"
+-- expect file a.txt
+xyabc
+
+== name: insertmode toggles and returns the new state
+-- keys
+insertmode
+-- expect result true
+-- keys
+insertmode
+-- expect result false
+
+== name: insertmode rejects an argument
+-- keys
+arg insertmode
+-- expect message Invalid argument
+
+== name: graphic pads virtual space and adds lines
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+down down right right right "z"
+-- expect file a.txt
+ab
+
+   z
+
+== name: graphic expands tabs of the edited line only
+-- file a.txt
+\tx
+\ty
+-- args a.txt
+-- keys
+right "z"
+-- expect file a.txt
+ z      x
+\ty
+
+== name: graphic overtypes a wide character as a whole
+-- file a.txt
+日本
+-- args a.txt
+-- keys
+"a"
+-- expect file a.txt
+a本
+-- expect cursor 0 1
+
+== name: graphic types a wide character
+-- keys
+insertmode "日x"
+-- expect cursor 0 3
+
+== name: graphic assigned to a control key inserts its code
+-- tools.ini
+[mep]
+graphic:ctrl+l
+-- keys
+ctrl+l
+-- expect file <untitled> noeol
+\f
+
+== name: graphic by name without a key does nothing
+-- keys
+graphic
+-- expect result false
+
+== name: graphic with an argument from a macro is invalid
+-- tools.ini
+[mep]
+typex:=arg "a" graphic
+-- keys
+typex
+-- expect message Invalid argument
+
+== name: wordwrap breaks at the last blank before the margin
+-- tools.ini
+[mep]
+wordwrap:
+rmargin:10
+-- keys
+insertmode "  hello world"
+-- expect file <untitled> noeol
+  hello
+  world
+-- expect cursor 1 7
+
+== name: wordwrap does not break a word without a blank
+-- tools.ini
+[mep]
+wordwrap:
+rmargin:4
+-- keys
+insertmode "abcdefg"
+-- expect file <untitled> noeol
+abcdefg
+
+== name: quote inserts the next key literally
+-- keys
+quote
+-- expect waiting
+-- keys
+esc
+-- expect file <untitled> noeol
+\e
+-- keys
+quote f2
+-- expect file <untitled> noeol
+\e
+
+== name: quote with an argument is invalid
+-- keys
+arg quote
+-- expect message Invalid argument
+
+== name: cdelete in overtype mode blanks the previous character
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+right right cdelete
+-- expect file a.txt
+a c
+-- expect cursor 0 1
+
+== name: cdelete in insert mode deletes it
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+insertmode right right cdelete
+-- expect file a.txt
+ac
+
+== name: cdelete beyond the line end moves to the end
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right right right right right cdelete
+-- expect cursor 0 2
+-- expect file a.txt
+ab
+
+== name: cdelete at column 0 moves to the previous line end
+-- file a.txt
+ab
+cd
+-- args a.txt
+-- keys
+down cdelete
+-- expect cursor 0 2
+-- keys
+meta begline cdelete
+-- expect result false
+
+== name: cdelete with a nullarg is invalid
+-- keys
+arg cdelete
+-- expect message Invalid argument
+
+== name: cdelete blanks a wide character in overtype mode
+-- file a.txt
+日x
+-- args a.txt
+-- keys
+right cdelete
+-- expect file a.txt
+  x
+
+== name: emacscdel joins lines in insert mode
+-- file a.txt
+ab
+cd
+-- args a.txt
+-- keys
+insertmode down emacscdel
+-- expect file a.txt
+abcd
+-- expect cursor 0 2
+
+== name: emacscdel beyond the file moves up in insert mode
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+insertmode down down emacscdel
+-- expect cursor 1 0
+-- expect file a.txt
+ab
+
+== name: emacscdel in overtype mode acts like cdelete
+-- file a.txt
+ab
+cd
+-- args a.txt
+-- keys
+down emacscdel
+-- expect cursor 0 2
+-- expect file a.txt
+ab
+cd
+
+== name: emacscdel edits the text argument
+-- keys
+arg "abc" emacscdel ldelete
+-- expect message Invalid argument
+
+== name: emacsnewl in overtype mode only moves
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+right emacsnewl
+-- expect cursor 1 0
+-- expect file a.txt
+abc
+
+== name: emacsnewl in insert mode splits the line with indentation
+-- file a.txt
+  ab cd
+-- args a.txt
+-- keys
+insertmode right right right right right emacsnewl
+-- expect file a.txt
+  ab 
+  cd
+-- expect cursor 1 2
+
+== name: meta emacsnewl splits without indentation
+-- file a.txt
+  abcd
+-- args a.txt
+-- keys
+insertmode right right right right meta emacsnewl
+-- expect file a.txt
+  ab
+cd
+
+== name: emacsnewl beyond the file adds lines
+-- file a.txt crlf
+a
+-- args a.txt
+-- keys
+insertmode down down emacsnewl
+-- expect file a.txt crlf
+a
+~
+~
+~
+== name: sdelete deletes the character under the cursor
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+right sdelete
+-- expect file a.txt
+ac
+-- expect cursor 0 1
+
+== name: sdelete at the line end does nothing
+-- file a.txt
+ab
+cd
+-- args a.txt
+-- keys
+right right sdelete
+-- expect file a.txt
+ab
+cd
+-- expect result true
+
+== name: sdelete deletes a wide character
+-- file a.txt
+日x
+-- args a.txt
+-- keys
+sdelete
+-- expect file a.txt
+x
+
+== name: arg sdelete joins the next line at the cursor
+-- file a.txt
+abc
+def
+-- args a.txt
+-- keys
+right arg sdelete
+-- expect file a.txt
+adef
+-- expect clipboard stream
+bc
+~
+
+== name: arg sdelete beyond the end pads first
+-- file a.txt
+ab
+cd
+-- args a.txt
+-- keys
+right right right right arg sdelete
+-- expect file a.txt
+ab  cd
+
+== name: arg sdelete on the last line takes the rest of it
+-- file a.txt noeol
+abc
+-- args a.txt
+-- keys
+right arg sdelete
+-- expect file a.txt noeol
+a
+-- expect clipboard stream
+bc
+
+== name: arg stream sdelete across lines
+-- file a.txt
+abc
+def
+ghi
+-- args a.txt
+-- keys
+right arg down down sdelete
+-- expect file a.txt
+ahi
+-- expect clipboard stream
+bc
+def
+g
+-- expect cursor 0 1
+
+== name: sdelete edits the text argument
+-- keys
+arg "abc" begline sdelete endline copy
+-- expect clipboard stream
+bc
+
+== name: sinsert inserts a blank
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right sinsert
+-- expect file a.txt
+a b
+-- expect cursor 0 1
+
+== name: sinsert beyond the end changes nothing
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right right right sinsert
+-- expect file a.txt
+ab
+
+== name: arg sinsert splits the line at the anchor
+-- file a.txt
+abcd
+-- args a.txt
+-- keys
+right right arg sinsert
+-- expect file a.txt
+ab
+cd
+-- expect cursor 0 2
+
+== name: arg sinsert beyond the end adds a line
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right right right arg sinsert
+-- expect file a.txt
+ab
+~
+
+== name: stream sinsert on one line inserts blanks
+-- file a.txt
+abcd
+-- args a.txt
+-- keys
+right arg right right sinsert
+-- expect file a.txt
+a  bcd
+-- expect cursor 0 1
+
+== name: stream sinsert across lines
+-- file a.txt
+abcd
+xy
+-- args a.txt
+-- keys
+right arg down right right sinsert
+-- expect file a.txt
+a
+   bcd
+xy
+
+== name: sinsert edits the text argument
+-- keys
+arg "ab" left sinsert right right ldelete
+-- expect message Invalid argument
+
+== name: ldelete deletes the current line
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+right ldelete
+-- expect file a.txt
+two
+-- expect clipboard line
+one
+-- expect cursor 0 1
+
+== name: ldelete beyond the file puts an empty line in the clipboard
+-- file a.txt
+one
+-- args a.txt
+-- keys
+down down ldelete
+-- expect clipboard line
+~
+-- expect file a.txt
+one
+
+== name: arg ldelete deletes to the end of the line without joining
+-- file a.txt
+abc
+def
+-- args a.txt
+-- keys
+right arg ldelete
+-- expect file a.txt
+a
+def
+-- expect clipboard stream
+bc
+
+== name: arg ldelete beyond the file is an empty stream
+-- keys
+down down arg ldelete
+-- expect clipboard stream
+~
+
+== name: box ldelete deletes the box and pads short rows
+-- file a.txt
+abcdef
+g
+hijklm
+-- args a.txt
+-- keys
+right arg down down right right right ldelete
+-- expect file a.txt
+aef
+g
+hlm
+-- expect clipboard box 3
+bcd
+   
+ijk
+-- expect cursor 0 1
+
+== name: stream ldelete on one line
+-- file a.txt
+abcdef
+-- args a.txt
+-- keys
+right arg right right ldelete
+-- expect file a.txt
+adef
+-- expect clipboard stream
+bc
+
+== name: linearg ldelete clamps at the end of the file
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+down arg "5" ldelete
+-- expect file a.txt
+one
+-- expect clipboard line
+two
+
+== name: linearg ldelete beyond the file
+-- file a.txt
+one
+-- args a.txt
+-- keys
+down down arg "2" ldelete
+-- expect clipboard line
+~
+
+== name: ldelete with text is invalid
+-- keys
+arg "x" ldelete
+-- expect message Invalid argument
+
+== name: linsert inserts a blank line above
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+down right linsert
+-- expect file a.txt
+one
+
+two
+-- expect cursor 1 1
+
+== name: linsert beyond the file does nothing
+-- file a.txt
+one
+-- args a.txt
+-- keys
+down down linsert
+-- expect file a.txt
+one
+
+== name: arg linsert moves the first nonblank under the cursor
+-- file a.txt
+    abc
+abc
+x
+-- args a.txt
+-- keys
+right right arg linsert
+-- expect file a.txt
+  abc
+abc
+x
+-- keys
+down arg linsert
+-- expect file a.txt
+  abc
+  abc
+x
+
+== name: arg linsert on a blank line does nothing
+-- file a.txt
+   
+-- args a.txt
+-- keys
+arg linsert
+-- expect file a.txt
+   
+
+== name: linearg linsert inserts blank lines above
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+down arg "2" linsert
+-- expect file a.txt
+one
+
+
+two
+
+== name: box linsert inserts a box of blanks
+-- file a.txt
+abcd
+x
+-- args a.txt
+-- keys
+right right arg down right right linsert
+-- expect file a.txt
+ab  cd
+x   
+-- expect cursor 0 2
+
+== name: stream linsert inserts blanks on one line
+-- file a.txt
+abcd
+-- args a.txt
+-- keys
+right arg right right linsert
+-- expect file a.txt
+a  bcd
+
+== name: pbal closes the unbalanced opening bracket
+-- file a.txt
+f(a[b] 
+-- args a.txt
+-- keys
+insertmode endline pbal
+-- expect file a.txt
+f(a[b]) 
+-- expect result true
+
+== name: meta pbal only highlights
+-- file a.txt
+{x
+-- args a.txt
+-- keys
+endline meta pbal
+-- expect file a.txt
+{x
+-- expect result true
+
+== name: arg pbal scans forward for an unbalanced closing bracket
+-- file a.txt
+x a)]
+-- args a.txt
+-- keys
+insertmode arg pbal
+-- expect file a.txt
+(x a)]
+
+== name: pbal without an unbalanced bracket fails
+-- file a.txt
+(a) [x]
+-- args a.txt
+-- keys
+endline pbal
+-- expect message No unbalanced bracket
+-- expect result false
+-- keys
+arg pbal
+-- expect result false
+
+== name: pbal stops at a mismatched bracket
+-- file a.txt
+(a]
+-- args a.txt
+-- keys
+endline pbal
+-- expect result false
+
+== name: pbal shows a match outside the window on the dialog line
+-- size 40 5
+-- file a.txt
+(start
+1
+2
+3
+4
+5
+end
+-- args a.txt
+-- keys
+arg ppage endline meta pbal
+-- expect message (start
+
+== name: pbal with text is invalid
+-- keys
+arg "x" pbal
+-- expect message Invalid argument
+
+== name: undo reverses the last change and restores the cursor
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+right "xy" right undo
+-- expect file a.txt
+axc
+-- expect cursor 0 2
+-- expect result true
+
+== name: undo goes back step by step and stops when empty
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+"x" "y" undo
+-- expect file a.txt
+xbc
+-- keys
+undo undo
+-- expect file a.txt
+abc
+
+== name: undocount limits the steps
+-- tools.ini
+[mep]
+undocount:1
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+"x" "y" undo undo
+-- expect file a.txt
+xbc
+
+== name: undocount 0 keeps nothing
+-- tools.ini
+[mep]
+undocount:0
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+insertmode emacsnewl undo
+-- expect file a.txt
+~
+abc
+
+== name: a macro is one undo step
+-- tools.ini
+[mep]
+two:="a" "b"
+-- keys
+two undo
+-- expect file <untitled> noeol
+
+== name: undo rejects an argument
+-- keys
+arg undo
+-- expect message Invalid argument
+
+== name: undocount 0 with two changes in one command
+-- tools.ini
+[mep]
+undocount:0
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right right right right "x" undo
+-- expect file a.txt
+ab  x
+
+== name: box ldelete reaching beyond the file
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+arg down down right ldelete
+-- expect file a.txt
+bc
+-- expect clipboard box 1
+a
+ 
+ 
+
+== name: pbal with the cursor beyond the file
+-- file a.txt
+(x
+-- args a.txt
+-- keys
+down down down meta pbal
+-- expect result true
+
+== name: arg linsert with the first nonblank already under the cursor
+-- file a.txt
+  abc
+-- args a.txt
+-- keys
+right right arg linsert
+-- expect file a.txt
+  abc
+-- expect result true
+
+== name: wordwrap in overtype mode with text after the cursor
+-- tools.ini
+[mep]
+wordwrap:
+rmargin:4
+-- file a.txt
+ab cdefgh
+-- args a.txt
+-- keys
+right right right right right "x"
+-- expect file a.txt
+ab
+cdxfgh
+
+== name: wordwrap does not break at leading blanks
+-- tools.ini
+[mep]
+wordwrap:
+rmargin:4
+-- keys
+insertmode "   abcdef"
+-- expect file <untitled> noeol
+   abcdef
+
+== name: emacscdel in insert mode inside a line and at the start of the file
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+insertmode right emacscdel
+-- expect file a.txt
+bc
+-- keys
+emacscdel
+-- expect result false
+
+== name: sdelete beyond the file does nothing
+-- keys
+down down sdelete
+-- expect result true
+
+== name: ldelete of the last line without a final break
+-- file a.txt noeol
+a
+b
+-- args a.txt
+-- keys
+down arg down ldelete
+-- expect file a.txt
+a
+-- expect clipboard line
+b
+
+== name: arg pbal finds an unbalanced closing brace
+-- file a.txt
+x}
+-- args a.txt
+-- keys
+insertmode arg meta pbal
+-- expect result true
+
+== name: pbal shows a match above the window on the dialog line
+-- size 40 5
+-- file a.txt
+{top
+1
+2
+3
+4
+5
+6
+-- args a.txt
+-- keys
+arg ppage endline meta pbal
+-- expect message {top
+
+== name: arg pbal shows a match below the window on the dialog line
+-- size 40 5
+-- file a.txt
+x
+1
+2
+3
+4
+5
+end)
+-- args a.txt
+-- keys
+arg meta pbal
+-- expect message end)

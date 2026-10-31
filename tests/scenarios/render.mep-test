@@ -1,0 +1,188 @@
+== name: status line shows the file type by extension
+-- file a.c
+x
+-- file b.asm
+x
+-- file c.pas
+x
+-- file d.bas
+x
+-- file e.for
+x
+-- file f.h
+x
+-- args a.c
+-- size 60 4
+-- expect status
+/work/a.c (C NL) Length=1  Window=(1,1)
+-- keys
+arg "b.asm" setfile
+-- expect status
+/work/b.asm (asm NL) Length=1  Window=(1,1)
+-- keys
+arg "c.pas" setfile
+-- expect status
+/work/c.pas (pascal NL) Length=1  Window=(1,1)
+-- keys
+arg "d.bas" setfile
+-- expect status
+/work/d.bas (basic NL) Length=1  Window=(1,1)
+-- keys
+arg "e.for" setfile
+-- expect status
+/work/e.for (fortran NL) Length=1  Window=(1,1)
+-- keys
+arg "f.h" setfile
+-- expect status
+/work/f.h (C NL) Length=1  Window=(1,1)
+
+== name: displaycursor shows the cursor and meta is shown
+-- tools.ini
+[mep]
+displaycursor:
+-- keys
+down right meta
+-- expect status
+<untitled> (text NL) Length=1  Cursor=(2,2) meta
+
+== name: length does not count the empty line after a final break
+-- file a.txt
+one
+two
+-- args a.txt
+-- expect status
+/work/a.txt (text NL) Length=2  Window=(1,1)
+
+== name: anchor and linearg highlights are drawn
+-- size 30 5
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+arg
+-- expect frame
+one
+two
+
+
+/work/a.txt (text NL) Length=2
+-- keys
+down
+-- expect frame
+one
+two
+
+
+/work/a.txt (text NL) Length=2
+
+== name: selection beyond the end of the line is highlighted
+-- size 30 4
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+arg down right right right right
+-- expect frame
+ab
+
+
+/work/a.txt (text NL) Length=1
+
+== name: tabs, trailing spaces, control characters and invalid bytes
+-- tools.ini
+[mep]
+tabdisp:183
+trailspace:
+traildisp:126
+-- file a.txt
+a\tb  
+\f\xff
+-- args a.txt
+-- size 30 5
+-- expect frame
+a·······b~~
+��
+
+
+/work/a.txt (text NL) Length=2
+
+== name: horizontal scrolling hides glyphs that do not fit
+-- size 10 4
+-- file a.txt
+日本日本日本日本x
+-- args a.txt
+-- keys
+endline
+-- expect window 0 9
+-- expect frame
+ 本日本x
+
+
+/work/a.tx
+
+== name: prompts and messages are drawn on the dialog line
+-- size 60 4
+-- keys
+arg "new.txt" setfile
+-- expect frame
+
+
+/work/new.txt does not exist. Create? (y/n)
+<untitled> (text NL) Length=1  Window=(1,1)
+-- keys
+"y" arg arg setfile
+-- expect frame
+
+
+Saved /work/new.txt
+/work/new.txt (text NL) Length=1  Window=(1,1)
+
+== name: the read-only name prompt shows the typed name
+-- size 60 4
+-- file r.txt readonly
+ro
+-- args r.txt
+-- keys
+"x" arg arg setfile "n"
+-- expect frame
+xo
+
+File is read-only. Save as: n
+/work/r.txt (text modified NL) Length=1  Window=(1,1)
+
+== name: inner spaces stay blank when trailing spaces are shown
+-- tools.ini
+[mep]
+trailspace:
+traildisp:126
+-- file a.txt
+a b  
+-- args a.txt
+-- size 30 4
+-- expect frame
+a b~~
+
+
+/work/a.txt (text NL) Length=1
+
+== name: a wide character at the right edge is not drawn
+-- size 5 4
+-- file a.txt
+abcd日
+-- args a.txt
+-- expect frame
+abcd
+
+
+/work
+
+== name: error messages and the insert cursor are drawn
+-- size 30 4
+-- keys
+insertmode arg "x" ldelete
+-- expect frame
+
+
+Invalid argument
+<untitled> (text NL) Length=1

@@ -1,0 +1,94 @@
+== name: startup without tools.ini
+-- notoolsini
+-- tools.ini
+[mep]
+tabstops:2
+-- keys
+tab
+-- expect cursor 0 4
+
+== name: startup execute commands run in order and report errors
+-- execute "ab"
+-- execute nosuch
+-- expect message nosuch: unknown function
+-- expect file <untitled> noeol
+ab
+
+== name: resize changes the window size
+-- file a.txt
+one
+-- args a.txt
+-- resize 20 4
+-- expect frame
+one
+
+
+/work/a.txt (text NL
+
+== name: tick without running work does nothing
+-- keys
+tick
+-- expect result true
+
+== name: a second clipboard failure is not reported again
+-- clipboard unavailable
+-- keys
+copy
+-- expect message System clipboard not available; using the internal clipboard
+-- keys
+copy
+-- expect message
+
+== name: a completion for a cancelled request is ignored
+-- file b.txt
+b
+-- file c.txt
+c
+-- keys
+hold arg "b.txt" setfile esc
+hold arg "c.txt" setfile
+-- release
+-- expect current c.txt
+
+== name: quote types keys without a character binding
+-- keys
+quote key:tab quote bksp quote num7 quote num+ quote num-
+-- expect file <untitled> noeol
+        \b7+-
+
+== name: unexpected replies make the waiting command fail
+-- keys
+hold initialize
+-- inject saved
+-- expect result false
+-- keys
+hold paste
+-- inject saved
+-- expect result true
+-- keys
+hold arg arg "x.txt" paste
+-- inject saved
+-- expect result false
+-- keys
+hold arg "x.txt" setfile
+-- inject clipboard
+-- expect result false
+-- keys
+hold arg "<clipboard>" setfile
+-- inject loaded
+-- expect current <clipboard>
+
+== name: trailing spaces are drawn as blanks without trailspace
+-- file a.txt
+ab  
+-- args a.txt
+-- size 30 4
+-- expect frame
+ab
+
+
+/work/a.txt (text NL) Length=1
+
+== name: the front end closing ends the editor
+-- close
+-- expect quit

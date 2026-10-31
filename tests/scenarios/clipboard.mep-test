@@ -1,0 +1,284 @@
+== name: copy copies the current line
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+down copy
+-- expect clipboard line
+two
+-- expect result true
+
+== name: copy beyond the file copies an empty line
+-- keys
+down down copy
+-- expect clipboard line
+~
+
+== name: arg copy copies to the end of the line
+-- file a.txt
+one two
+-- args a.txt
+-- keys
+pword arg copy
+-- expect clipboard stream
+two
+
+== name: textarg copy copies the text
+-- keys
+arg "hello" copy
+-- expect clipboard stream
+hello
+
+== name: numarg copy copies lines and clamps
+-- file a.txt
+1
+2
+3
+-- args a.txt
+-- keys
+down arg "9" copy
+-- expect clipboard line
+2
+3
+
+== name: linearg copy beyond the file
+-- file a.txt
+1
+-- args a.txt
+-- keys
+down down arg down copy
+-- expect clipboard line
+~
+
+== name: box copy pads short rows
+-- file a.txt
+abcd
+a
+abcd
+-- args a.txt
+-- keys
+right arg down down right right copy
+-- expect clipboard box 2
+bc
+  
+bc
+-- keys
+copy
+-- expect clipboard line
+abcd
+
+== name: copy writes text and shape to the system clipboard; paste reads it back as a box
+-- file a.txt
+abcd
+efgh
+xy
+-- args a.txt
+-- keys
+right arg down right right copy
+down meta begline right paste
+-- expect file a.txt
+abcd
+efgh
+xbcy
+ fg
+-- expect cursor 2 1
+
+== name: line paste goes above the current line
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+copy down paste
+-- expect file a.txt
+one
+one
+two
+-- expect cursor 1 0
+-- expect result true
+
+== name: line paste beyond the file appends
+-- file a.txt
+one
+-- args a.txt
+-- keys
+copy down down paste
+-- expect file a.txt
+one
+~
+one
+
+== name: stream paste inserts at the cursor and splits lines
+-- file a.txt
+abc
+def
+-- args a.txt
+-- keys
+right arg down sdelete
+paste
+-- expect file a.txt
+abc
+def
+
+== name: external text ending with a newline pastes as lines
+-- clipboard
+from
+outside
+~
+-- file a.txt
+x
+-- args a.txt
+-- keys
+paste
+-- expect file a.txt
+from
+outside
+x
+
+== name: external text without final newline pastes as a stream
+-- clipboard
+in
+line
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right paste
+-- expect file a.txt
+ain
+lineb
+
+== name: a stale private record is ignored
+-- clipboard record box 4
+plain
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right paste
+-- expect file a.txt
+aplainb
+
+== name: a matching private record gives the shape
+-- clipboard record line
+alpha
+-- file a.txt
+x
+-- args a.txt
+-- keys
+paste
+-- expect file a.txt
+alpha
+x
+
+== name: unavailable system clipboard falls back to the internal clipboard once
+-- clipboard unavailable
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+copy
+-- expect message System clipboard not available; using the internal clipboard
+-- keys
+paste
+-- expect message
+-- expect file a.txt
+ab
+ab
+
+== name: textarg paste puts the text in the clipboard and inserts it at the anchor
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right arg "XY" paste
+-- expect file a.txt
+aXYb
+-- expect clipboard stream
+XY
+-- expect cursor 0 1
+
+== name: arg paste inserts the rest of the line (NULLEOL)
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+right arg paste
+-- expect file a.txt
+abcbc
+
+== name: streamarg paste uses the highlighted text
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+arg right right paste
+-- expect file a.txt
+ababc
+
+== name: arg arg textarg paste inserts a file at the cursor
+-- file a.txt
+ab
+-- file b.txt
+one
+two
+-- args a.txt
+-- keys
+right arg arg "b.txt" paste
+-- expect file a.txt
+aone
+two
+b
+-- expect result true
+
+== name: arg arg paste of a missing file fails
+-- keys
+arg arg "none.txt" paste
+-- expect result false
+
+== name: arg arg paste of a pseudo-file fails
+-- keys
+arg arg "<x>" paste
+-- expect message <x>: cannot insert a pseudo-file
+
+== name: arg arg !command paste is not available
+-- keys
+arg arg "!ls" paste
+-- expect message paste !command: not available in this version
+-- expect result false
+
+== name: paste rejects a selection
+-- file a.txt
+ab
+cd
+-- args a.txt
+-- keys
+arg down paste
+-- expect message Invalid argument
+
+== name: copy rejects nothing; ldelete fills the clipboard file
+-- keys
+arg "x" copy arg "<clipboard>" setfile
+-- expect current <clipboard>
+-- expect file <clipboard> noeol
+x
+-- keys
+arg "y" copy
+-- expect file <clipboard> noeol
+y
+
+== name: clipboard file shows external text
+-- clipboard
+outside
+-- keys
+arg "<clipboard>" setfile
+-- expect file <clipboard> noeol
+outside
+
+== name: clipboard file with unavailable clipboard
+-- clipboard unavailable
+-- keys
+arg "<clipboard>" setfile
+-- expect file <clipboard> noeol
+~

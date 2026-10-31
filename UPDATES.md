@@ -4,6 +4,103 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.9.0, m1 verification on macos)
+
+- cargo clippy with -D warnings passes for the whole workspace including tests on x86_64-unknown-linux-gnu and x86_64-pc-windows-msvc; running the tests there is still open
+- the ignored system clipboard test passes on macos: a box copied by mep reads as plain text in other apps (pbpaste) and comes back as a box
+- the m1 manual checklist ran on macos through a pty: ctrl+c, ctrl+z and ctrl+\ arrive as keys; resize while editing works; a tools.ini key assignment and a macro with -> work; external text pastes as a stream; an edited crlf line keeps crlf and unedited lines stay byte-exact; exit walks the file list
+- open: scripts/check.sh on linux and scripts/check.ps1 on windows, the checklist on windows terminal, iterm2, ghostty and a linux terminal
+
+### 2026-11-01 (v0.9.0, m1 tasks 14 and 20 front end and clipboard adapter)
+
+- task 14: mep-clip writes plain text plus the private shape record in one clipboard-rs call and reads both; image support disabled; an ignored integration test does a real round trip on a desktop session
+- task 20: mep-term converts crossterm keys (keypad, shift folding, release events ignored), maps dos colors to ansi with bright backgrounds, and diffs frames, moving the cursor only between non-adjacent changed cells; sys.rs holds only terminal setup
+- task 20: the mep binary runs an io and clipboard worker thread, a render thread that draws only the newest frame, and the input thread from main.rs; while a search runs the main loop polls input and ticks slices
+- added Event::Close so a failed terminal write ends the editor instead of leaving it waiting for input; terminal setup runs only after the command line parsed, so usage errors print on the normal screen
+- added Env::cwd for relative file names and OsEnv with local time from tzif zone files and posix tz rules, without an extra crate; windows uses utc for now
+- added scenario cases for the meta form and a rejected argument kind of every m1 command (425 cases in total)
+- smoke test through a real pty on macos: typing, saving and quitting work and an edited crlf line keeps crlf
+- added clipboard-rs 0.3.5 (no default features) and crossterm 0.29.0
+- version bump: 0.8.0 to 0.9.0 (MINOR - terminal front end, clipboard adapter and binary)
+
+### 2026-11-01 (v0.8.0, m1 tasks 8 to 13 and 15 to 19 editor core)
+
+- task 8: render module builds the frame: text window with tabdisp, traildisp, placeholders for invalid bytes and control characters, selection and match highlight in hgcolor, dialog line with arg text, prompts and messages, status line with up to eight fields
+- task 9: command table with argument flags per spec, dispatcher with arg-mode text editing, selection extension by cursor functions, argument classification (nullarg, text, numarg to lines, stream, line, box, boxstr, nulleol, nulleow), meta handling, and the scenario harness in crates/mep-core/tests/scenarios.rs
+- tasks 10 to 12: movement, editing and undo commands per docs/spec/commands; undo groups per top-level command with deltas and undocount
+- task 13: clipboard core with shapes, private record, system clipboard requests, byte-exact internal clipboard for text mep wrote itself, clipboard pseudo-file and one-time fallback message
+- task 15: plain search in bounded slices with esc to cancel; regex forms report not yet supported
+- tasks 16 to 19: tools.ini sections and statements, assign, initialize, macros with a resumable stack, execute, lasttext, setfile, refresh, exit with autosave, backup, read-only prompt, and the cur insertion functions
+- the core never blocks on io: commands suspend on requests and prompts and resume on completions; typed keys wait in a type-ahead queue
+- line index carries edited flags; saving trims and re-tabs edited lines only; a file ending with a line break keeps it when lines are added
+- 46 oracle items recorded in docs/oracle.md
+- coverage: every function the scenario binary uses is covered by scenarios, because unit tests and scenarios build separate copies of the library
+- rationale: implementation_plan.md sections 3.5 and 6; open points from the spec agent are listed in the command specs
+- version bump: 0.7.0 to 0.8.0 (MINOR - editor core)
+
+### 2026-10-31 (v0.7.0, m1 task 7 switch table and spec files)
+
+- wrote docs/spec/commands (55 m1 commands plus 9 not-available stubs) and docs/spec/switches.md from the m guide, with test checklists and proposed oracle ids
+- added the switches module: one table entry per switch with its kind and range; booleans use name: and noname: only, numbers are decimal 0 to 65535 unless the spec narrows them, colors one or two hex digits, tabdisp and traildisp a printable one-cell character code, backup none or bak, free text switches accept any text and clear when empty
+- vmbuf, shortnames and savescreen are type-checked but have no effect; values are trimmed; unknown switches and invalid values give a message and leave the value unchanged
+- also finished ahead of their tasks: Frame and view scrolling (task 8), clipboard model with fnv-1a record (task 13), tools.ini search path and sections plus the Env trait (task 16), macro parser (task 17), and the clap-based cli parser in the mep crate (task 20)
+- added clap 4.6.7 with derive and proptest to the mep crate
+- recorded ORACLE INI-1 in docs/oracle.md
+- version bump: 0.6.0 to 0.7.0 (MINOR - new switches api)
+
+### 2026-10-31 (v0.6.0, m1 task 6 keys and default keymap)
+
+- added the keys module: Key (code plus ctrl, alt, shift), case-insensitive key-name parser and canonical lowercase printer (ctrl+alt+shift+ order), named keys from m guide section 6.2.1 plus enter and space, f1 to f12, num0 to num9, num+ and num-
+- a modifier prefix needs a key after it, so alt++ is alt with the plus key; unknown names fail with "unknown key name 'x'"
+- added Keymap with the default column of table a.2; unbound printable keys run graphic, all other unbound keys run unassigned
+- every default key name and random key names round-trip through parser and printer
+- version bump: 0.5.0 to 0.6.0 (MINOR - new keys api)
+
+### 2026-10-31 (v0.5.0, m1 task 5 file table and file io)
+
+- added the io module: Fs trait, worker requests (load, save) with completions, and serve, which runs a request against an Fs; the core never touches the disk
+- saving refuses read-only files, renames the old version to .bak with backup:bak, then writes atomically
+- added MemFs, an in-memory Fs with injectable failures per operation and path, public so other crates can test with it
+- added the file module: File (name, text, modified, readonly, default crlf terminator), FileName (disk path or pseudo-file), FileTable with stable FileId handles, and lexical path resolution
+- added OsFs in mep/src/os.rs; write_atomic keeps the old file permissions and removes its temporary file on failure; tested against tempfile directories
+- added tempfile 3.27.0 as a dev dependency of mep, and mep-core as a dependency of mep
+- recorded ORACLE FILE-BAK-1 in docs/oracle.md
+- version bump: 0.4.0 to 0.5.0 (MINOR - new file and io api)
+
+### 2026-10-31 (v0.4.0, m1 task 4 cell model)
+
+- added the cells module: glyphs with byte range, first cell and width; wide characters take two cells, zero-width characters attach to the previous glyph (one cell at line start), tabs expand to the next multiple of 8, invalid bytes and control characters take one cell each
+- cell to byte mapping in both directions, box ranges that take a wide character when its first cell is inside, detab, and entab for saving edited lines
+- entab converts a run of two or more spaces reaching a tab stop; entab 1 keeps spaces inside double or single quotes; a space carrying a combining mark is never converted
+- added unicode-width 0.2.2 to mep-core, pinned because 0.2.3 is younger than two weeks
+- recorded ORACLE TAB-1 in docs/oracle.md
+- version bump: 0.3.0 to 0.4.0 (MINOR - new cell model api)
+
+### 2026-10-31 (v0.3.0, m1 task 3 line index and terminators)
+
+- added LineIndex: line starts kept in two stacks split at the last edit, absolute before the split and as distance from the end after it, so edits never shift the rest of the file
+- added Text in a new text module: gap buffer plus line index, per-line terminators (none, lf, crlf) and byte-exact to_bytes for saving
+- a line ends only at a line feed; a lone carriage return stays line content; a final line break is followed by an empty last line
+- GapBuffer::delete now returns the removed bytes so Text validates a range once
+- property test: the incremental index after random edits equals a full rebuild
+- rationale: size rule from implementation_plan.md section 3.5; the text module is an addition to the section 4.4 module table
+- version bump: 0.2.0 to 0.3.0 (MINOR - new line index and text api)
+
+### 2026-10-31 (v0.2.0, concurrency and large documents)
+
+- added implementation_plan.md section 3.5: deterministic single-threaded core with worker threads for input, rendering, file io, clipboard and jobs, using std threads and mpsc channels
+- commands needing io suspend and resume on a completion event; the macro interpreter is resumable; long core work such as search runs in bounded slices
+- size rule: edit cost depends on the edit, not the file; incremental line index, visible-only rendering, delta undo
+- added performance tests (section 9.6) with budgets on a 100 mb, 2 million line reference document, and updated the affected m1 tasks
+- rationale: owner requirement that the editor never slows down on large documents; a deterministic core keeps scenario tests and the coverage gate workable, and tokio would add a large dependency without speeding up large documents
+- version bump: none (plan only)
+
+### 2026-10-31 (v0.2.0, no commits at task end)
+
+- the commit protocol now states that finishing a plan task never triggers a commit; the agent summarizes and waits for the owner
+- rationale: owner decision after the task 2 commit was made without asking; the owner reviews every task before it is committed
+- version bump: none (instructions only)
+
 ### 2026-10-31 (v0.2.0, m1 task 2 gap buffer)
 
 - added GapBuffer in mep-core: byte storage with insert and delete at a byte offset and slice access, bytes kept unchanged including invalid utf-8

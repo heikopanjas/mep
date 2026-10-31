@@ -1,0 +1,889 @@
+== name: assign clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta assign
+-- expect meta off
+
+== name: assign rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+assign
+-- expect message Invalid argument
+-- expect result false
+
+== name: backtab clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta backtab
+-- expect meta off
+
+== name: backtab rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" backtab
+-- expect message Invalid argument
+-- expect result false
+
+== name: begline clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta begline
+-- expect meta off
+
+== name: cancel clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta cancel
+-- expect meta off
+
+== name: cdelete clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta cdelete
+-- expect meta off
+
+== name: cdelete rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg cdelete
+-- expect message Invalid argument
+-- expect result false
+
+== name: copy clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta copy
+-- expect meta off
+
+== name: curdate clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta curdate
+-- expect meta off
+
+== name: curdate rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg curdate
+-- expect message Invalid argument
+-- expect result false
+
+== name: curday clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta curday
+-- expect meta off
+
+== name: curday rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg curday
+-- expect message Invalid argument
+-- expect result false
+
+== name: curfile clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta curfile
+-- expect meta off
+
+== name: curfile rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg curfile
+-- expect message Invalid argument
+-- expect result false
+
+== name: curfileext clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta curfileext
+-- expect meta off
+
+== name: curfileext rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg curfileext
+-- expect message Invalid argument
+-- expect result false
+
+== name: curfilenam clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta curfilenam
+-- expect meta off
+
+== name: curfilenam rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg curfilenam
+-- expect message Invalid argument
+-- expect result false
+
+== name: curtime clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta curtime
+-- expect meta off
+
+== name: curtime rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg curtime
+-- expect message Invalid argument
+-- expect result false
+
+== name: curuser clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta curuser
+-- expect meta off
+
+== name: curuser rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg curuser
+-- expect message Invalid argument
+-- expect result false
+
+== name: down clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta down
+-- expect meta off
+
+== name: down rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" down
+-- expect message Invalid argument
+-- expect result false
+
+== name: emacscdel clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta emacscdel
+-- expect meta off
+
+== name: emacscdel rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg emacscdel
+-- expect message Invalid argument
+-- expect result false
+
+== name: emacsnewl clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta emacsnewl
+-- expect meta off
+
+== name: emacsnewl rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg emacsnewl
+-- expect message Invalid argument
+-- expect result false
+
+== name: endline clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta endline
+-- expect meta off
+
+== name: execute clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta execute
+-- expect meta off
+
+== name: execute rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+execute
+-- expect message Invalid argument
+-- expect result false
+
+== name: exit rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" exit
+-- expect message Invalid argument
+-- expect result false
+
+== name: graphic clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta "g"
+-- expect meta off
+
+== name: home clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta home
+-- expect meta off
+
+== name: home rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" home
+-- expect message Invalid argument
+-- expect result false
+
+== name: initialize clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta initialize
+-- expect meta off
+
+== name: initialize rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg down initialize
+-- expect message Invalid argument
+-- expect result false
+
+== name: insertmode clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta insertmode
+-- expect meta off
+
+== name: insertmode rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg insertmode
+-- expect message Invalid argument
+-- expect result false
+
+== name: ldelete clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta ldelete
+-- expect meta off
+
+== name: ldelete rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" ldelete
+-- expect message Invalid argument
+-- expect result false
+
+== name: left clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta left
+-- expect meta off
+
+== name: linsert clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta linsert
+-- expect meta off
+
+== name: linsert rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" linsert
+-- expect message Invalid argument
+-- expect result false
+
+== name: mlines clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta mlines
+-- expect meta off
+
+== name: mlines rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" mlines
+-- expect message Invalid argument
+-- expect result false
+
+== name: mpage clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta mpage
+-- expect meta off
+
+== name: mpage rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" mpage
+-- expect message Invalid argument
+-- expect result false
+
+== name: mpara clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta mpara
+-- expect meta off
+
+== name: mpara rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" mpara
+-- expect message Invalid argument
+-- expect result false
+
+== name: msearch clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta msearch
+-- expect meta off
+
+== name: msearch rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg down msearch
+-- expect message Invalid argument
+-- expect result false
+
+== name: mword clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta mword
+-- expect meta off
+
+== name: mword rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" mword
+-- expect message Invalid argument
+-- expect result false
+
+== name: newline clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta newline
+-- expect meta off
+
+== name: newline rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" newline
+-- expect message Invalid argument
+-- expect result false
+
+== name: paste clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta paste
+-- expect meta off
+
+== name: paste rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg down paste
+-- expect message Invalid argument
+-- expect result false
+
+== name: pbal clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta pbal
+-- expect meta off
+
+== name: pbal rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" pbal
+-- expect message Invalid argument
+-- expect result false
+
+== name: plines clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta plines
+-- expect meta off
+
+== name: plines rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" plines
+-- expect message Invalid argument
+-- expect result false
+
+== name: ppage clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta ppage
+-- expect meta off
+
+== name: ppage rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" ppage
+-- expect message Invalid argument
+-- expect result false
+
+== name: ppara clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta ppara
+-- expect meta off
+
+== name: ppara rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" ppara
+-- expect message Invalid argument
+-- expect result false
+
+== name: psearch clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta psearch
+-- expect meta off
+
+== name: psearch rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg down psearch
+-- expect message Invalid argument
+-- expect result false
+
+== name: pword clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta pword
+-- expect meta off
+
+== name: pword rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" pword
+-- expect message Invalid argument
+-- expect result false
+
+== name: quote clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta quote "q"
+-- expect meta off
+
+== name: quote rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg quote
+-- expect message Invalid argument
+-- expect result false
+
+== name: refresh clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta refresh "n"
+-- expect meta off
+
+== name: refresh rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" refresh
+-- expect message Invalid argument
+-- expect result false
+
+== name: restcur clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta restcur
+-- expect meta off
+
+== name: restcur rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" restcur
+-- expect message Invalid argument
+-- expect result false
+
+== name: right clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta right
+-- expect meta off
+
+== name: savecur clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta savecur
+-- expect meta off
+
+== name: savecur rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" savecur
+-- expect message Invalid argument
+-- expect result false
+
+== name: sdelete clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta sdelete
+-- expect meta off
+
+== name: setfile clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta setfile
+-- expect meta off
+
+== name: setfile rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg down setfile
+-- expect message Invalid argument
+-- expect result false
+
+== name: setwindow clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta setwindow
+-- expect meta off
+
+== name: setwindow rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" setwindow
+-- expect message Invalid argument
+-- expect result false
+
+== name: sinsert clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta sinsert
+-- expect meta off
+
+== name: tab clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta tab
+-- expect meta off
+
+== name: tab rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" tab
+-- expect message Invalid argument
+-- expect result false
+
+== name: undo clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta undo
+-- expect meta off
+
+== name: undo rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg undo
+-- expect message Invalid argument
+-- expect result false
+
+== name: up clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta up
+-- expect meta off
+
+== name: up rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" up
+-- expect message Invalid argument
+-- expect result false
+
+== name: arg keeps meta
+-- keys
+meta arg
+-- expect meta on
+
+== name: lasttext keeps meta
+-- keys
+meta lasttext
+-- expect meta on
+
+== name: unassigned keeps meta
+-- keys
+meta alt+p
+-- expect meta on
+
+== name: meta keeps meta
+-- keys
+meta
+-- expect meta on

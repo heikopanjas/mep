@@ -1,0 +1,459 @@
+== name: startup opens the first file and drops the untitled buffer
+-- file a.txt
+one
+-- args a.txt
+-- expect current a.txt
+-- keys
+setfile
+-- expect message No previous file
+-- expect result false
+
+== name: arg textarg setfile opens a file and setfile toggles back
+-- file a.txt
+one
+-- file b.txt
+two
+-- args a.txt
+-- keys
+arg "b.txt" setfile
+-- expect current b.txt
+-- expect result true
+-- keys
+setfile
+-- expect current a.txt
+-- keys
+setfile
+-- expect current b.txt
+
+== name: autosave saves a modified file when switching away
+-- file a.txt
+one
+-- file b.txt
+two
+-- args a.txt
+-- keys
+"X" arg "b.txt" setfile
+-- expect disk a.txt
+Xne
+-- expect current b.txt
+
+== name: meta setfile switches without saving
+-- file a.txt
+one
+-- file b.txt
+two
+-- args a.txt
+-- keys
+"X" arg "b.txt" meta setfile
+-- expect disk a.txt
+one
+-- expect file a.txt
+Xne
+
+== name: noautosave keeps changes in memory
+-- tools.ini
+[mep]
+noautosave:
+-- file a.txt
+one
+-- file b.txt
+two
+-- args a.txt
+-- keys
+"X" arg "b.txt" setfile
+-- expect disk a.txt
+one
+
+== name: arg setfile takes the word at the anchor
+-- file a.txt
+b.txt rest
+-- file b.txt
+two
+-- args a.txt
+-- keys
+arg setfile
+-- expect current b.txt
+
+== name: arg setfile on a blank is invalid
+-- file a.txt
+ x
+-- args a.txt
+-- keys
+arg setfile
+-- expect message Invalid argument
+
+== name: streamarg setfile uses the highlighted name
+-- file a.txt
+b.txt
+-- file b.txt
+two
+-- args a.txt
+-- keys
+arg right right right right right setfile
+-- expect current b.txt
+
+== name: opening a missing file asks to create it
+-- keys
+arg "new.txt" setfile
+-- expect waiting
+-- keys
+"y"
+-- expect current new.txt
+-- expect file new.txt noeol
+~
+-- expect result true
+
+== name: declining the create prompt keeps the current file
+-- keys
+arg "new.txt" setfile "x" "n"
+-- expect current <untitled>
+-- expect result false
+
+== name: an unreadable file fails
+-- file bad.txt
+x
+-- fail read bad.txt
+-- keys
+arg "bad.txt" setfile
+-- expect result false
+-- expect message /work/bad.txt: injected Read failure for /work/bad.txt
+
+== name: a failing save stops the switch
+-- file a.txt
+one
+-- fail write a.txt
+-- args a.txt
+-- keys
+"X" arg "b.txt" setfile
+-- expect result false
+-- expect current a.txt
+
+== name: a failing reread keeps the buffer
+-- file a.txt
+one
+-- args a.txt
+-- fail read a.txt
+-- keys
+"X" refresh "y"
+-- expect result false
+-- expect file a.txt
+Xne
+
+== name: wildcards are not available
+-- keys
+arg "*.c" setfile
+-- expect message Wildcard file lists are not available in this version
+
+== name: a pseudo-file is created on demand
+-- keys
+arg "<scratch>" setfile
+-- expect current <scratch>
+
+== name: arg arg setfile saves the current file
+-- file a.txt
+one
+-- args a.txt
+-- keys
+"X" arg arg setfile
+-- expect disk a.txt
+Xne
+-- expect message Saved /work/a.txt
+-- expect result true
+
+== name: saving re-tabs and trims edited lines only
+-- file a.txt
+keep   
+        x  
+-- args a.txt
+-- keys
+down "        " arg arg setfile
+-- expect disk a.txt
+keep   
+\tx
+
+== name: arg arg textarg setfile writes a copy and keeps the file modified
+-- file a.txt
+one
+-- args a.txt
+-- keys
+"X" arg arg "copy.txt" setfile
+-- expect disk copy.txt
+Xne
+-- expect disk a.txt
+one
+-- expect status
+/work/a.txt (text modified NL) Length=1  Window=(1,1)
+
+== name: saving to a pseudo-file name fails
+-- keys
+arg arg "<x>" setfile
+-- expect message <x>: cannot save to a pseudo-file
+
+== name: saving the untitled buffer needs a name
+-- keys
+"x" arg arg setfile
+-- expect message No file name: use arg arg name setfile
+-- expect result false
+
+== name: backup bak keeps the old version
+-- tools.ini
+[mep]
+backup:bak
+-- file a.c
+old
+-- args a.c
+-- keys
+"n" arg arg setfile
+-- expect disk a.bak
+old
+-- expect disk a.c
+nld
+
+== name: saving a read-only file asks for a new name
+-- file r.txt readonly
+ro
+-- args r.txt
+-- expect message File is read-only
+-- keys
+"X" arg arg setfile
+-- expect waiting
+-- keys
+"w.txt" bksp "t" enter
+-- expect disk w.txt
+Xo
+-- expect current w.txt
+
+== name: declining the new name for a read-only file
+-- file r.txt readonly
+ro
+-- args r.txt
+-- keys
+"X" arg arg setfile esc
+-- expect result false
+
+== name: a read-only command is not available
+-- tools.ini
+[mep]
+readonly:chmod u+w
+-- file r.txt readonly
+ro
+-- args r.txt
+-- keys
+"X" arg arg setfile
+-- expect message readonly command: not available in this version
+
+== name: setfile rejects a selection
+-- file a.txt
+ab
+cd
+-- args a.txt
+-- keys
+arg down setfile
+-- expect message Invalid argument
+
+== name: exit saves and walks the file list
+-- file a.txt
+one
+-- file b.txt
+two
+-- args a.txt b.txt
+-- keys
+"X" exit
+-- expect disk a.txt
+Xne
+-- expect current b.txt
+-- expect result true
+-- keys
+exit
+-- expect quit
+
+== name: arg exit quits without advancing
+-- file a.txt
+one
+-- file b.txt
+two
+-- args a.txt b.txt
+-- keys
+arg exit
+-- expect quit
+
+== name: meta exit does not save
+-- file a.txt
+one
+-- args a.txt
+-- keys
+"X" meta exit
+-- expect disk a.txt
+one
+-- expect quit
+
+== name: exit advancing to a missing file asks to create it
+-- file a.txt
+one
+-- args a.txt b.txt
+-- keys
+exit "y"
+-- expect current b.txt
+
+== name: exit with an unsaved untitled buffer fails
+-- keys
+"x" exit
+-- expect message No file name: use arg arg name setfile, or meta exit
+-- expect result false
+
+== name: exit saves no pseudo-file
+-- keys
+arg "<p>" setfile "x" exit
+-- expect quit
+
+== name: askexit asks before quitting
+-- tools.ini
+[mep]
+askexit:
+-- keys
+exit
+-- expect waiting
+-- keys
+"n"
+-- expect result false
+-- keys
+exit "q" "y"
+-- expect quit
+
+== name: exit asks when other files are modified
+-- file a.txt
+one
+-- file b.txt
+two
+-- args a.txt
+-- keys
+"X" arg "b.txt" meta setfile exit
+-- expect waiting
+-- keys
+"y"
+-- expect quit
+
+== name: exit stops when saving fails
+-- file a.txt readonly
+one
+-- args a.txt
+-- keys
+"X" exit esc
+-- expect result false
+
+== name: refresh rereads the file after confirmation
+-- file a.txt
+one
+-- args a.txt
+-- keys
+"X" refresh "y"
+-- expect file a.txt
+one
+-- expect result true
+-- expect status
+/work/a.txt (text NL) Length=1  Window=(1,1)
+
+== name: refresh declined keeps the edits
+-- file a.txt
+one
+-- args a.txt
+-- keys
+"X" refresh "n"
+-- expect file a.txt
+Xne
+-- expect result false
+
+== name: refresh of the untitled buffer fails
+-- keys
+refresh "y"
+-- expect message No file on disk to reread
+
+== name: refresh of a file that vanished fails
+-- keys
+arg "gone.txt" setfile "y" "x" refresh "y"
+-- expect result false
+
+== name: refresh of the clipboard file rereads the clipboard
+-- clipboard
+fresh
+-- keys
+arg "<clipboard>" setfile refresh "y"
+-- expect file <clipboard> noeol
+fresh
+
+== name: arg refresh discards the file
+-- file a.txt
+one
+-- file b.txt
+two
+-- args a.txt
+-- keys
+arg "b.txt" setfile "X" arg refresh "y"
+-- expect current a.txt
+-- keys
+arg refresh "y"
+-- expect current <untitled>
+
+== name: crlf files keep crlf and show no NL
+-- file a.txt crlf
+one
+-- args a.txt
+-- keys
+insertmode endline emacsnewl "two" arg arg setfile
+-- expect disk a.txt crlf
+one
+two
+-- expect status
+/work/a.txt (text) Length=2  Window=(1,1) insert
+
+== name: unedited lines of a mixed file round-trip byte-exact
+-- file a.txt
+lf line
+-- args a.txt
+-- keys
+arg arg setfile
+-- expect disk a.txt
+lf line
+
+== name: setfile to an open file by name switches to it
+-- file a.txt
+one
+-- file b.txt
+two
+-- args a.txt
+-- keys
+arg "b.txt" setfile arg "a.txt" setfile
+-- expect current a.txt
+
+== name: a modified pseudo-file is not saved when switching
+-- keys
+arg "<p>" setfile "x" arg "<q>" setfile
+-- expect current <q>
+-- keys
+setfile
+-- expect file <p> noeol
+x
+
+== name: a modified untitled buffer stays as the previous file
+-- keys
+"x" arg "<q>" setfile setfile
+-- expect current <untitled>
+
+== name: windows uses crlf for new files and clipboard text
+-- os windows
+-- keys
+"a" insertmode emacsnewl "b" arg mpage arg down copy arg "new.txt" setfile "y"
+-- expect file <untitled> crlf
+a
+b
+-- expect status
+/work/new.txt (text) Length=1  Window=(1,1) insert
+
+== name: initialize with an unreadable tools.ini fails
+-- tools.ini
+[mep]
+-- fail read /ini/tools.ini
+-- keys
+initialize
+-- expect message TOOLS.INI: injected Read failure for /ini/tools.ini
+-- expect result false

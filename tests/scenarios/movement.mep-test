@@ -1,0 +1,631 @@
+== name: left right up down move by cells
+-- file a.txt
+abc
+de
+-- args a.txt
+-- keys
+right right down
+-- expect cursor 1 2
+-- expect result true
+-- keys
+up left
+-- expect cursor 0 1
+-- expect result true
+
+== name: left at column 0 and up at line 0 return false
+-- keys
+left
+-- expect result false
+-- keys
+up
+-- expect result false
+
+== name: right returns false beyond the end of the line
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right
+-- expect result true
+-- keys
+right
+-- expect result false
+-- expect cursor 0 2
+-- keys
+right
+-- expect cursor 0 3
+
+== name: wide characters move by their width
+-- file a.txt
+日本x
+-- args a.txt
+-- keys
+right
+-- expect cursor 0 2
+-- keys
+right right left
+-- expect cursor 0 4
+-- keys
+left
+-- expect cursor 0 2
+
+== name: left from virtual space moves one cell
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right right right right left
+-- expect cursor 0 3
+
+== name: down beyond the last line is allowed
+-- file a.txt
+a
+-- args a.txt
+-- keys
+down down down
+-- expect cursor 3 0
+-- expect result true
+
+== name: meta up down left right stay in the window
+-- size 40 6
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+-- args a.txt
+-- keys
+down meta down
+-- expect cursor 3 0
+-- keys
+meta right
+-- expect cursor 3 39
+-- expect result false
+-- keys
+meta left
+-- expect cursor 3 0
+-- keys
+meta up
+-- expect cursor 0 0
+-- keys
+meta up
+-- expect result false
+
+== name: begline goes to the first nonblank character
+-- file a.txt
+   abc  
+-- args a.txt
+-- keys
+endline
+-- expect cursor 0 6
+-- keys
+begline
+-- expect cursor 0 3
+-- expect result true
+-- keys
+begline
+-- expect result false
+-- keys
+meta begline
+-- expect cursor 0 0
+
+== name: begline and endline on a blank line and beyond the file
+-- file a.txt
+   
+-- args a.txt
+-- keys
+right right begline
+-- expect cursor 0 0
+-- keys
+right endline
+-- expect cursor 0 0
+-- keys
+down down endline
+-- expect cursor 2 0
+
+== name: meta endline goes one past the window edge
+-- size 20 5
+-- file a.txt
+x
+-- args a.txt
+-- keys
+meta endline
+-- expect cursor 0 20
+-- expect window 0 10
+
+== name: home goes to the window corner
+-- size 40 6
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+-- args a.txt
+-- keys
+down down down down down right right
+home
+-- expect cursor 3 0
+-- expect window 3 0
+-- expect result true
+-- keys
+home
+-- expect result false
+
+== name: pword moves to the next word start across lines
+-- file a.txt
+one two_x
+  three
+-- args a.txt
+-- keys
+pword
+-- expect cursor 0 4
+-- keys
+pword
+-- expect cursor 1 2
+-- keys
+pword
+-- expect result false
+-- expect cursor 1 2
+
+== name: meta pword moves right of the current or next word
+-- file a.txt
+one  two
+-- args a.txt
+-- keys
+right meta pword
+-- expect cursor 0 3
+-- keys
+meta pword
+-- expect cursor 0 8
+-- keys
+meta pword
+-- expect result false
+
+== name: mword moves to the start of the current or previous word
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+down right right mword
+-- expect cursor 1 0
+-- keys
+mword
+-- expect cursor 0 4
+-- keys
+mword mword
+-- expect cursor 0 0
+-- expect result false
+
+== name: meta mword moves right of the previous word
+-- file a.txt
+one two three
+-- args a.txt
+-- keys
+endline meta mword
+-- expect cursor 0 7
+-- keys
+meta mword
+-- expect cursor 0 3
+-- keys
+meta mword
+-- expect result false
+-- keys
+right right meta mword
+-- expect cursor 0 3
+
+== name: tab and backtab use tabstops
+-- keys
+tab tab
+-- expect cursor 0 8
+-- keys
+right backtab
+-- expect cursor 0 8
+-- keys
+backtab backtab
+-- expect cursor 0 0
+-- keys
+backtab
+-- expect result false
+
+== name: tabstops switch
+-- tools.ini
+[mep]
+tabstops:3
+-- keys
+tab tab
+-- expect cursor 0 6
+
+== name: newline with softcr follows indentation
+-- file a.txt
+    one
+two
+      
+-- args a.txt
+-- keys
+right right right right right newline
+-- expect cursor 1 0
+-- keys
+up endline newline newline
+-- expect cursor 2 0
+-- keys
+up up newline
+-- expect cursor 1 0
+-- keys
+up begline down newline
+-- expect cursor 2 0
+
+== name: newline indents a blank line like the previous line
+-- file a.txt
+    one
+
+-- args a.txt
+-- keys
+newline
+-- expect cursor 1 4
+-- expect result true
+
+== name: meta newline and nosoftcr go to column 0
+-- file a.txt
+    one
+    two
+-- args a.txt
+-- keys
+meta newline
+-- expect cursor 1 0
+-- keys
+assign
+-- keys
+arg "nosoftcr:" assign up newline
+-- expect cursor 1 0
+
+== name: savecur and restcur
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+restcur
+-- expect result false
+-- keys
+down right savecur up restcur
+-- expect cursor 1 1
+-- expect result true
+
+== name: plines and mlines move the window and the cursor row
+-- size 40 6
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+-- args a.txt
+-- keys
+down plines
+-- expect window 3 0
+-- expect cursor 4 0
+-- expect result true
+-- keys
+mlines
+-- expect window 0 0
+-- expect cursor 1 0
+-- keys
+mlines
+-- expect result false
+
+== name: arg plines puts the cursor line on top, arg mlines at the bottom
+-- size 40 6
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+8
+-- args a.txt
+-- keys
+down down arg plines
+-- expect window 2 0
+-- expect result true
+-- keys
+arg plines
+-- expect result false
+-- keys
+down down down arg mlines
+-- expect window 2 0
+-- keys
+up up up arg mlines
+-- expect window 0 0
+-- expect result true
+
+== name: numarg plines and mlines
+-- size 40 6
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+8
+9
+-- args a.txt
+-- keys
+arg "5" plines
+-- expect window 5 0
+-- keys
+arg "2" mlines
+-- expect window 3 0
+-- keys
+arg "0" plines
+-- expect result false
+
+== name: plines stops at the last line
+-- size 40 6
+-- file a.txt
+1
+2
+-- args a.txt
+-- keys
+plines
+-- expect window 1 0
+-- keys
+plines
+-- expect result false
+
+== name: ppage and mpage move by a window
+-- size 40 6
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+-- args a.txt
+-- keys
+down ppage
+-- expect window 4 0
+-- expect cursor 5 0
+-- keys
+arg "2" ppage
+-- expect window 11 0
+-- keys
+mpage
+-- expect window 7 0
+-- keys
+arg "1" mpage
+-- expect window 3 0
+
+== name: arg ppage goes to the end and arg mpage to the start
+-- file a.txt
+one
+two
+three
+-- args a.txt
+-- keys
+right arg ppage
+-- expect cursor 2 0
+-- keys
+arg mpage
+-- expect cursor 0 0
+-- expect result true
+-- keys
+arg mpage
+-- expect result false
+
+== name: streamarg ppage uses a highlighted number
+-- size 40 6
+-- file a.txt
+2 x
+3
+4
+5
+6
+7
+8
+9
+10
+11
+-- args a.txt
+-- keys
+arg right ppage
+-- expect window 8 0
+
+== name: streamarg ppage with text is invalid
+-- file a.txt
+x y
+-- args a.txt
+-- keys
+arg right right ppage
+-- expect message Invalid argument
+-- expect result false
+
+== name: streamarg mpage with a number and with text
+-- size 40 6
+-- file a.txt
+1 x
+2
+3
+4
+5
+6
+7
+8
+9
+10
+-- args a.txt
+-- keys
+arg ppage arg mpage
+arg right mpage
+-- expect result false
+-- keys
+arg right right mpage
+-- expect message Invalid argument
+
+== name: ppara and mpara move by paragraphs
+-- file a.txt
+one
+two
+
+three
+four
+
+five
+-- args a.txt
+-- keys
+ppara
+-- expect cursor 3 0
+-- keys
+ppara
+-- expect cursor 6 0
+-- keys
+ppara
+-- expect cursor 7 0
+-- keys
+ppara
+-- expect result false
+-- keys
+mpara
+-- expect cursor 5 0
+-- keys
+mpara
+-- expect cursor 2 0
+-- keys
+mpara
+-- expect cursor 0 0
+
+== name: meta ppara and meta mpara
+-- file a.txt
+one
+two
+
+three
+-- args a.txt
+-- keys
+meta ppara
+-- expect cursor 2 0
+-- keys
+meta ppara
+-- expect cursor 4 0
+-- keys
+meta mpara
+-- expect cursor 3 0
+-- keys
+up up up meta mpara
+-- expect result false
+
+== name: setwindow arg makes the anchor the window corner
+-- file a.txt
+one
+two
+three
+-- args a.txt
+-- keys
+down right arg setwindow
+-- expect window 1 1
+-- expect result true
+-- keys
+setwindow
+-- expect result true
+
+== name: cursor functions extend a selection
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+arg down endline copy
+-- expect clipboard box 3
+one
+two
+
+== name: cursor functions reject a typed text argument
+-- keys
+arg "x" up
+-- expect message Invalid argument
+-- expect result false
+
+== name: vertical scrolling jumps by vscroll and far jumps use hike
+-- size 40 6
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+-- args a.txt
+-- keys
+down down down down
+-- expect window 3 0
+-- keys
+arg ppage
+-- expect window 16 0
+
+== name: restcur in another file returns false
+-- file a.txt
+one
+-- file b.txt
+two
+-- args a.txt
+-- keys
+savecur arg "b.txt" setfile restcur
+-- expect result false
+
+== name: meta ppara at the end of the file
+-- file a.txt
+one
+-- args a.txt
+-- keys
+down meta ppara
+-- expect result false
+
+== name: mpara from a blank first line
+-- file a.txt
+
+one
+-- args a.txt
+-- keys
+mpara
+-- expect result false

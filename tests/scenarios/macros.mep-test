@@ -1,0 +1,378 @@
+== name: macro with conditionals erases a line (Blankline, M guide p. 53)
+-- tools.ini
+[mep]
+Blankline:=Endline :>back Sdelete Left +>back
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+Blankline
+-- expect file a.txt
+~
+-- expect cursor 0 0
+
+== name: Halfscreen macro (M guide p. 49)
+-- tools.ini
+[mep]
+Halfscreen:=Meta Up Arg "11" Plines Begline
+-- size 40 20
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+-- args a.txt
+-- keys
+down down Halfscreen
+-- expect window 11 0
+
+== name: Header macros with nested calls (M guide p. 49)
+-- tools.ini
+[mep]
+Head1:=Arg "3" Linsert "/**"
+Head2:=Newline "** Routine:"
+Head3:=Newline "**/" Up Endline Right
+Header:=Head1 Head2 Head3
+-- keys
+Header
+-- expect file <untitled>
+/**
+** Routine:
+**/
+-- expect cursor 1 12
+
+== name: a text-only macro types its text
+-- tools.ini
+[mep]
+Proc:="procedure();"
+-- keys
+Proc
+-- expect file <untitled> noeol
+procedure();
+
+== name: savefile macro (MSJ)
+-- tools.ini
+[mep]
+savefile:=arg arg setfile
+savefile:shift+f2
+-- file a.txt
+one
+-- args a.txt
+-- keys
+"X" shift+f2
+-- expect disk a.txt
+Xne
+
+== name: print macro structure with clipboard file and shell stubbed (MSJ)
+-- tools.ini
+[mep]
+print1:=copy arg "<clipboard>" setfile
+print2:=arg arg "TEMP.DAT" setfile setfile
+print:=print1 print2
+-- file a.txt
+line one
+line two
+-- args a.txt
+-- keys
+arg down print
+-- expect disk TEMP.DAT
+line one
+line two
+-- expect current a.txt
+
+== name: bigprint open-arg chain with meta test (MSJ, selectall without mark)
+-- tools.ini
+[mep]
+selectall:=arg mpage arg :>l ppara +>l
+grab:=copy
+bigprint:=meta +>nometa cancel selectall meta :>nometa meta grab
+-- file a.txt
+one
+two
+three
+-- args a.txt
+-- keys
+meta bigprint
+-- expect clipboard line
+one
+two
+three
+-- keys
+arg mpage arg right bigprint
+-- expect clipboard stream
+o
+
+== name: a macro ending with an open arg passes it to the next function
+-- tools.ini
+[mep]
+openarg:=arg
+-- file a.txt
+one
+-- args a.txt
+-- keys
+openarg ldelete
+-- expect clipboard stream
+one
+
+== name: the pending argument goes to the first function that takes one
+-- tools.ini
+[mep]
+cp:=copy
+-- file a.txt
+one two
+-- args a.txt
+-- keys
+arg right right right cp
+-- expect clipboard stream
+one
+
+== name: jumps exit the macro and test results
+-- tools.ini
+[mep]
+quitearly:="a" => "b"
+neg:=left ->done "x" :>done "y"
+pos:=left +> "z"
+-- keys
+quitearly
+-- expect file <untitled> noeol
+a
+-- keys
+meta begline neg
+-- expect file <untitled> noeol
+y
+-- keys
+pos
+-- expect file <untitled> noeol
+y
+
+== name: a missing label stops the macro
+-- tools.ini
+[mep]
+lost:=right =>nowhere "x"
+-- keys
+lost
+-- expect message Macro label not found: nowhere
+-- expect result false
+
+== name: macro return value is the last function's value
+-- tools.ini
+[mep]
+lastleft:=right left left
+-- keys
+lastleft
+-- expect result false
+
+== name: recursion is stopped at the depth limit
+-- tools.ini
+[mep]
+loop:=loop
+-- keys
+loop
+-- expect message Macro nesting too deep
+-- expect result false
+
+== name: unknown function at runtime
+-- tools.ini
+[mep]
+broken:=nosuchthing
+-- keys
+broken
+-- expect message nosuchthing: unknown function
+-- expect result false
+
+== name: a macro waits at a file load and continues with its result
+-- tools.ini
+[mep]
+openb:=arg "b.txt" setfile +>ok "F" :>ok "T"
+-- file b.txt
+xy
+-- keys
+hold openb
+-- expect waiting
+-- release
+-- expect current b.txt
+-- expect file b.txt
+Ty
+
+== name: execute runs text as a macro
+-- file a.txt
+"ab" left
+-- args a.txt
+-- keys
+arg execute
+-- expect file a.txt
+abb" left
+-- expect cursor 0 1
+-- expect result true
+
+== name: execute validates names and labels before running
+-- file a.txt
+"a" bogus
+"x
+-- args a.txt
+-- keys
+arg execute
+-- expect message bogus: unknown function
+-- expect file a.txt
+"a" bogus
+"x
+-- keys
+arg "=>nolabel" execute
+-- expect message Macro label not found: nolabel
+-- keys
+down arg execute
+-- expect message unterminated string in macro
+
+== name: arg execute uses the rest of the line
+-- file a.txt
+x "q"
+-- args a.txt
+-- keys
+right right arg execute
+-- expect file a.txt
+x qq"
+
+== name: linearg and streamarg execute
+-- file a.txt
+"1"
+"2"
+-- args a.txt
+-- keys
+arg down execute
+-- expect file a.txt
+"1"
+12"
+
+== name: stream execute across lines
+-- file a.txt
+"a" "b"
+"c"
+-- args a.txt
+-- keys
+arg down right right right execute
+-- expect result true
+
+== name: execute rejects no argument
+-- keys
+execute
+-- expect message Invalid argument
+
+== name: lasttext recalls the previous text argument
+-- file a.txt
+foo bar foo
+-- args a.txt
+-- keys
+arg "foo" psearch lasttext psearch
+-- expect cursor 0 8
+
+== name: lasttext with nothing recalled starts an empty text
+-- keys
+lasttext "x" copy
+-- expect clipboard stream
+x
+
+== name: arg lasttext keeps the count and replaces text
+-- keys
+arg "abc" copy arg "zz" lasttext copy
+-- expect clipboard stream
+abc
+
+== name: lasttext with a selection is invalid
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+arg right lasttext
+-- expect message Invalid argument
+-- expect result false
+
+== name: right past the end copies from the previous text
+-- keys
+arg "hello" copy arg "he" right right copy
+-- expect clipboard stream
+hell
+-- keys
+arg "x" right right copy
+-- expect clipboard stream
+xel
+
+== name: text argument editing functions
+-- keys
+arg "abcd" left left cdelete begline right sinsert endline arg copy
+-- expect clipboard stream
+a cd
+-- keys
+arg "x" left left copy
+-- expect clipboard stream
+x
+
+== name: quote inserts a key into the text argument
+-- keys
+arg "a" quote ctrl+l copy
+-- expect clipboard stream
+a\f
+
+== name: insert mode applies to the text argument
+-- keys
+arg "abc" begline "X" copy
+-- expect clipboard stream
+Xbc
+-- keys
+insertmode arg "abc" begline "X" copy
+-- expect clipboard stream
+Xabc
+
+== name: startup execute commands
+-- keys
+-- expect result true
+
+== name: not available functions report and clear the argument
+-- keys
+arg mark
+-- expect message mark: not available in this version
+-- expect result false
+-- keys
+window
+-- expect message window: not available in this version
+
+== name: arg lasttext without text recalls the previous text
+-- keys
+arg "abc" copy arg lasttext copy
+-- expect clipboard stream
+abc
+
+== name: execute calls macros and jumps to labels
+-- tools.ini
+[mep]
+tx:="t"
+-- file a.txt
+tx =>end "no" :>end
+-- args a.txt
+-- keys
+arg execute
+-- expect file a.txt
+tx =>end "no" :>end
+-- expect result true
+
+== name: deleting left at the start of a text argument fails
+-- keys
+arg "a" begline cdelete
+-- expect result false
+-- keys
+emacscdel
+-- expect result false
+-- keys
+copy
+-- expect clipboard stream
+a

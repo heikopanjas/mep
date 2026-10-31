@@ -40,17 +40,18 @@ impl GapBuffer
         Ok(())
     }
 
-    /// Deletes the logical byte `range`
+    /// Deletes the logical byte `range` and returns the removed bytes
     ///
     /// # Errors
     ///
     /// Returns an error and leaves the buffer unchanged if `range` is reversed or extends beyond the end.
-    pub fn delete(&mut self, range: Range<usize>) -> Result<()>
+    pub fn delete(&mut self, range: Range<usize>) -> Result<Vec<u8>>
     {
-        self.check_range(&range)?;
+        let (first, second) = self.slices(range.clone())?;
+        let removed = [first, second].concat();
         self.move_gap(range.start);
         self.gap_end += range.len();
-        Ok(())
+        Ok(removed)
     }
 
     /// Returns `true` if the buffer holds no bytes
@@ -237,9 +238,9 @@ mod tests
     fn test_delete_ranges()
     {
         let mut buffer = GapBuffer::from(b"0123456789".to_vec());
-        buffer.delete(8..10).unwrap();
-        buffer.delete(0..2).unwrap();
-        buffer.delete(2..4).unwrap();
+        assert_eq!(buffer.delete(8..10).unwrap(), b"89");
+        assert_eq!(buffer.delete(0..2).unwrap(), b"01");
+        assert_eq!(buffer.delete(2..4).unwrap(), b"45");
         assert_eq!(contents(&buffer), b"2367");
     }
 
@@ -336,8 +337,8 @@ mod tests
                     {
                         let (a, b) = (a % (model.len() + 1), b % (model.len() + 1));
                         let range = a.min(b)..a.max(b);
-                        buffer.delete(range.clone()).unwrap();
-                        model.drain(range);
+                        let removed: Vec<u8> = model.drain(range.clone()).collect();
+                        prop_assert_eq!(buffer.delete(range).unwrap(), removed);
                     }
                 }
                 prop_assert_eq!(buffer.len(), model.len());

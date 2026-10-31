@@ -1,0 +1,217 @@
+== name: tools.ini section by executable name with a multi-name tag
+-- tools.ini
+[make]
+case:
+[m mep]
+; comment
+hike:2
+exit:alt+x
+-- keys
+alt+x
+-- expect quit
+
+== name: the os section is read after the plain section
+-- tools.ini
+[mep]
+tabstops:2
+[mep-linux]
+tabstops:3
+-- keys
+tab
+-- expect cursor 0 3
+
+== name: errors in tools.ini are collected and shown after startup
+-- tools.ini
+[mep]
+bogus:1
+tabstops:x
+tabstops:5
+-- expect message /ini/tools.ini line 2: bogus: unknown function, macro or switch (and 1 more errors)
+-- keys
+tab
+-- expect cursor 0 5
+
+== name: a single tools.ini error is shown as is
+-- tools.ini
+[mep]
+nofunc:alt+q
+-- expect message /ini/tools.ini line 2: nofunc: unknown function, macro or switch
+
+== name: enterinsmode starts in insert mode
+-- tools.ini
+[mep]
+enterinsmode:
+-- expect status
+<untitled> (text NL) Length=1  Window=(1,1) insert
+
+== name: no tools.ini found at startup is fine
+-- keys
+arg "tabstops:2" assign tab
+-- expect cursor 0 2
+
+== name: assign textarg assigns a key
+-- keys
+arg "savecur:ctrl+b" assign
+-- expect result true
+-- keys
+right ctrl+b left restcur
+-- expect cursor 0 1
+
+== name: assign unassigned removes a key
+-- keys
+arg "unassigned:ctrl+e" assign ctrl+e
+-- expect message ctrl+e is not assigned to any editor function
+
+== name: assign defines a macro and assigns it
+-- file a.txt
+tw:="ab"
+-- args a.txt
+-- keys
+arg assign
+arg "tw:alt+t" assign down alt+t
+-- expect file a.txt
+tw:="ab"
+ab
+
+== name: assign errors
+-- keys
+arg "nocolon" assign
+-- expect message nocolon: missing ':'
+-- expect result false
+-- keys
+arg "exit:alt+nokey" assign
+-- expect message unknown key name 'alt+nokey'
+
+== name: assign macro syntax error
+-- file a.txt
+m:="x
+-- args a.txt
+-- keys
+arg assign
+-- expect message unterminated string in macro
+
+== name: assign question mark is not available
+-- keys
+arg "?" assign
+-- expect message assign ?: not available in this version
+
+== name: arg assign uses the rest of the line
+-- file a.txt
+x tabstops:6
+-- args a.txt
+-- keys
+right right arg assign tab
+-- expect cursor 0 6
+
+== name: linearg assign applies each line and skips blank ones
+-- file a.txt
+tabstops:2
+
+hike:1
+-- args a.txt
+-- keys
+arg down down assign
+-- expect result true
+
+== name: linearg assign reports the first error
+-- file a.txt
+bad:1
+hike:x
+-- args a.txt
+-- keys
+arg down assign
+-- expect message bad: unknown function, macro or switch
+-- expect result false
+
+== name: box assign uses the box of each line
+-- file a.txt
+xtabstops:7y
+xhike:2    y
+-- args a.txt
+-- keys
+right arg down right right right right right right right right right right assign
+-- expect result true
+-- keys
+up tab
+-- expect cursor 0 14
+
+== name: streamarg assign uses the highlighted text
+-- file a.txt
+case: x
+-- args a.txt
+-- keys
+arg right right right right right assign
+-- expect result true
+
+== name: assign rejects no argument
+-- keys
+assign
+-- expect message Invalid argument
+
+== name: initialize rereads the editor sections
+-- tools.ini
+[mep]
+tabstops:3
+-- keys
+arg "tabstops:8" assign initialize tab
+-- expect cursor 0 3
+-- expect result true
+
+== name: arg textarg initialize reads the tagged section
+-- tools.ini
+[mep]
+[mep-c]
+tabstops:5
+-- keys
+arg "c" initialize tab
+-- expect cursor 0 5
+
+== name: initialize with a missing section fails
+-- tools.ini
+[mep]
+-- keys
+arg "pascal" initialize
+-- expect message Section [mep-pascal] not found
+-- expect result false
+
+== name: arg initialize takes the word at the anchor
+-- tools.ini
+[mep]
+[mep-c]
+tabstops:6
+-- file a.txt
+c rest
+-- args a.txt
+-- keys
+arg initialize tab
+-- expect cursor 0 6
+
+== name: arg initialize on a blank is invalid
+-- file a.txt
+ c
+-- args a.txt
+-- keys
+arg initialize
+-- expect message Invalid argument
+
+== name: initialize without tools.ini fails
+-- keys
+initialize
+-- expect message TOOLS.INI not found
+-- expect result false
+
+== name: initialize with an unreadable tools.ini fails
+-- tools.ini
+[mep]
+-- keys
+initialize
+-- expect result true
+
+== name: initialize rejects a selection
+-- file a.txt
+ab
+cd
+-- args a.txt
+-- keys
+arg down initialize
+-- expect message Invalid argument

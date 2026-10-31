@@ -1,0 +1,156 @@
+== name: psearch finds the next match and repeats
+-- file a.txt
+one two
+two one two
+-- args a.txt
+-- keys
+arg "two" psearch
+-- expect cursor 0 4
+-- expect result true
+-- keys
+psearch
+-- expect cursor 1 0
+-- keys
+psearch
+-- expect cursor 1 8
+-- keys
+psearch
+-- expect result false
+-- expect message two not found
+-- expect cursor 1 8
+
+== name: msearch searches backward
+-- file a.txt
+ab ab
+ab
+-- args a.txt
+-- keys
+down right arg "ab" msearch
+-- expect cursor 1 0
+-- keys
+msearch
+-- expect cursor 0 3
+-- keys
+msearch msearch
+-- expect result false
+-- expect cursor 0 0
+
+== name: search ignores case unless the case switch is on
+-- file a.txt
+x ABC abc
+-- args a.txt
+-- keys
+arg "abc" psearch
+-- expect cursor 0 2
+-- keys
+arg "case:" assign arg mpage arg "abc" psearch
+-- expect cursor 0 6
+
+== name: arg psearch takes the word at the anchor
+-- file a.txt
+foo bar foo
+-- args a.txt
+-- keys
+arg psearch
+-- expect cursor 0 8
+
+== name: arg psearch on a blank is invalid
+-- file a.txt
+ x
+-- args a.txt
+-- keys
+arg psearch
+-- expect message Invalid argument
+
+== name: streamarg psearch uses the highlighted text
+-- file a.txt
+ab x ab
+-- args a.txt
+-- keys
+arg right right psearch
+-- expect cursor 0 5
+
+== name: psearch without a search string
+-- keys
+psearch
+-- expect message No search string
+-- expect result false
+
+== name: regular expressions are not yet supported
+-- keys
+arg arg "a+" psearch
+-- expect message Regular expressions are not yet supported
+-- keys
+arg "zz" psearch arg arg msearch
+-- expect message Regular expressions are not yet supported
+
+== name: search beyond the line end starts on the next line
+-- file a.txt
+ab
+ab
+-- args a.txt
+-- keys
+right right right arg "ab" psearch
+-- expect cursor 1 0
+
+== name: search highlights the match in the frame
+-- size 60 4
+-- file a.txt
+xx foo
+-- args a.txt
+-- keys
+arg "foo" psearch
+-- expect frame
+xx foo
+
+
+/work/a.txt (text NL) Length=1  Window=(1,1)
+
+== name: search runs in slices and the editor stays busy between them
+-- slice 1
+-- file a.txt
+a
+b
+c
+target
+-- args a.txt
+-- keys
+arg "target" psearch
+-- expect cursor 3 0
+
+== name: esc cancels a running search
+-- slice 1
+-- file a.txt
+a
+b
+c
+target
+-- args a.txt
+-- keys
+hold arg "target" psearch
+-- expect waiting
+-- keys
+esc
+-- expect message Operation cancelled
+-- expect result false
+-- expect cursor 0 0
+
+== name: keys typed during a search wait their turn
+-- slice 1
+-- file a.txt
+a
+target
+-- args a.txt
+-- keys
+hold arg "target" psearch ctrl+d
+-- expect waiting
+-- release
+-- expect cursor 1 1
+
+== name: search with an invalid byte in the line
+-- file a.txt
+\xff x
+-- args a.txt
+-- keys
+arg "x" psearch
+-- expect cursor 0 2

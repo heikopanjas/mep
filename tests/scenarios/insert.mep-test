@@ -1,0 +1,95 @@
+== name: curdate curday curtime insert the clock in manual formats
+-- keys
+curdate " " curday " " curtime
+-- expect file <untitled> noeol
+Jun-27-1987 Sat 13:45:55
+-- expect result true
+
+== name: curuser prefers MAILNAME
+-- env MAILNAME=heiko
+-- env USER=other
+-- keys
+curuser
+-- expect file <untitled> noeol
+heiko
+
+== name: curuser uses USER on Linux
+-- env USER=user
+-- keys
+curuser
+-- expect file <untitled> noeol
+user
+
+== name: curuser uses USERNAME on Windows
+-- os windows
+-- env USERNAME=win
+-- env USER=no
+-- keys
+curuser
+-- expect file <untitled> noeol
+win
+
+== name: curuser without a name fails
+-- keys
+curuser
+-- expect message User name not set
+-- expect result false
+
+== name: curfile curfilenam curfileext
+-- file archive.tar.gz
+~
+-- args archive.tar.gz
+-- keys
+curfile " " curfilenam " " curfileext
+-- expect file archive.tar.gz
+/work/archive.tar.gz archive.tar .gz
+
+== name: file names without extension and dot files
+-- file Makefile
+~
+-- args Makefile
+-- keys
+curfilenam curfileext
+-- expect file Makefile
+Makefile
+-- expect result true
+
+== name: dot file base name
+-- file .bashrc
+~
+-- args .bashrc
+-- keys
+curfilenam
+-- expect file .bashrc
+.bashrc
+
+== name: untitled buffer has no file name
+-- keys
+curfile
+-- expect result false
+-- keys
+curfilenam
+-- expect result false
+-- keys
+curfileext
+-- expect result false
+
+== name: pseudo-file names
+-- keys
+arg "<scratch>" setfile curfile curfilenam curfileext
+-- expect file <scratch> noeol
+<scratch><scratch>
+
+== name: insertion pads virtual space and always inserts
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+right right right right curday
+-- expect file a.txt
+ab  Sat
+
+== name: insertion functions reject an argument
+-- keys
+arg curdate
+-- expect message Invalid argument
