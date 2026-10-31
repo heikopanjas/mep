@@ -26,11 +26,15 @@ Non-goals for now: syntax highlighting, GUI, mouse support, Z editor behavior, t
 
 ## Technology Stack
 
-- **Language:** Rust, stable toolchain, edition 2024 (`rust-toolchain.toml` with `llvm-tools-preview`)
+- **Language:** Rust, stable toolchain, edition 2024 (`rust-toolchain.toml` with `clippy` and `llvm-tools-preview`)
+- **Formatting:** nightly rustfmt (`cargo +nightly fmt`), because `.rustfmt.toml` uses options that stable rustfmt ignores; building, linting and testing stay on stable
 - **Framework:** none; terminal I/O through `crossterm`, system clipboard through `clipboard-rs`
 - **Version Control:** Git
-- **Package Manager:** Cargo workspace (`crates/mep-core`, `crates/mep-term`, `crates/mep-clip`, `crates/mep`)
+- **Package Manager:** Cargo workspace (`crates/mep-core`, `crates/mep-term`, `crates/mep-clip`, `crates/mep`); `Cargo.lock` is committed
+- **Version manifest:** `[workspace.package] version` in the root `Cargo.toml`; all crates inherit it
 - **Coverage tool:** `cargo-llvm-cov`
+- **Check script:** `scripts/check` (sh) and `scripts/check.ps1` (Windows), optional `--report` for an HTML coverage report in `target/llvm-cov/html`
+- **CI:** `.github/workflows/ci.yml` runs the check script on Ubuntu, macOS and Windows
 - **License:** not decided; private project
 
 ## Session Protocol
@@ -144,6 +148,12 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 
 Load the `rust-coding-conventions` skill before writing, reviewing, or refactoring Rust code.
 Load the `rust-build-commands` skill when building or running the project.
+
+Project overrides of the skill:
+
+- No `anyhow` and no `clap`: only the crates in `IMPLEMENTATION_PLAN.md` §4.3 are allowed. Errors use `std::io::Result`, `bool` returns for commands, or project error types
+- Every crate root carries `#![allow(clippy::bool_comparison)]` for the explicit `== true` / `== false` style
+- The `require!` macro is added to a crate only when that crate first uses it
 
 <!-- {integration} -->
 

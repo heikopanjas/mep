@@ -1,0 +1,37 @@
+#!/bin/sh
+# Runs fmt, clippy, tests and the 100% coverage gate (IMPLEMENTATION_PLAN.md §9.1).
+#
+# Usage: scripts/check [--report]
+#   --report  also write an HTML coverage report to target/llvm-cov/html
+#
+# Formatting uses nightly rustfmt because .rustfmt.toml relies on options that
+# stable rustfmt ignores. Everything else runs on the stable toolchain.
+
+set -eu
+
+report=false
+for arg in "$@"; do
+    case "$arg" in
+        --report) report=true ;;
+        *)
+            echo "usage: scripts/check [--report]" >&2
+            exit 2
+            ;;
+    esac
+done
+
+cd "$(dirname "$0")/.."
+
+# The only files excluded from coverage: OS glue without logic (§7).
+ignore='(mep-term[/\\]src[/\\]sys\.rs|mep-clip[/\\]src[/\\]system\.rs|mep[/\\]src[/\\]main\.rs)$'
+
+cargo +nightly fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --doc --locked
+cargo llvm-cov clean --workspace
+cargo llvm-cov --workspace --locked --no-report
+cargo llvm-cov report --ignore-filename-regex "$ignore" \
+    --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
+if [ "$report" = true ]; then
+    cargo llvm-cov report --ignore-filename-regex "$ignore" --html
+fi
