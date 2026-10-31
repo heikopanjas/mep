@@ -26,16 +26,16 @@ Non-goals for now: syntax highlighting, GUI, mouse support, Z editor behavior, t
 
 ## Technology Stack
 
-- **Language:** Rust, stable toolchain, edition 2024 (`rust-toolchain.toml` with `clippy` and `llvm-tools-preview`)
-- **Formatting:** nightly rustfmt (`cargo +nightly fmt`), because `.rustfmt.toml` uses options that stable rustfmt ignores; building, linting and testing stay on stable
+- **Language:** Rust, nightly toolchain pinned in `rust-toolchain.toml` (currently `nightly-2026-10-31`, with `clippy`, `llvm-tools-preview` and `rustfmt`), edition 2024. `.rustfmt.toml` needs nightly rustfmt. Move the pin only on purpose, in its own commit
+- **Coverage data after a toolchain change:** run `cargo llvm-cov clean` (without `--workspace`) once; stale data from another toolchain produces bogus coverage reports
 - **Framework:** none; terminal I/O through `crossterm`, system clipboard through `clipboard-rs`
 - **Version Control:** Git
 - **Package Manager:** Cargo workspace (`crates/mep-core`, `crates/mep-term`, `crates/mep-clip`, `crates/mep`); `Cargo.lock` is committed
 - **Version manifest:** `[workspace.package] version` in the root `Cargo.toml`; all crates inherit it
 - **Coverage tool:** `cargo-llvm-cov`
-- **Check script:** `scripts/check` (sh) and `scripts/check.ps1` (Windows), optional `--report` for an HTML coverage report in `target/llvm-cov/html`
+- **Check script:** `scripts/check` (sh, needs `jq`) and `scripts/check.ps1` (Windows), optional `--report` for an HTML coverage report in `target/llvm-cov/html`
 - **CI:** `.github/workflows/ci.yml` runs the check script on Ubuntu, macOS and Windows
-- **License:** not decided; private project
+- **License:** MIT (`LICENSE`, `license = "MIT"` in the workspace manifest)
 
 ## Session Protocol
 
@@ -108,7 +108,7 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - **No panics on user input**: every command returns `bool`; failure means `false` plus a message on the dialog line
 - **Core isolation**: `mep-core` holds all editor logic, has `#![forbid(unsafe_code)]`, and never touches `std::fs`, `std::env`, the clock, the terminal or the OS clipboard directly; it goes through the `Terminal`, `SystemClipboard`, `Fs` and `Env` traits
 - **OS glue files** (`mep-term/src/sys.rs`, `mep-clip/src/system.rs`, `mep/src/main.rs`) contain only calls into the OS, no logic
-- **Dependencies**: only the crates listed in `IMPLEMENTATION_PLAN.md` §4.3. Any other crate, runtime or dev, needs a one-line justification and the owner's OK. No `clap`; FNV-1a 64 is implemented in-house
+- **Dependencies**: only the crates listed in `IMPLEMENTATION_PLAN.md` §4.3, which include `anyhow` and `clap`. Any other crate, runtime or dev, needs a one-line justification and the owner's OK. FNV-1a 64 is implemented in-house. A crate is added to a `Cargo.toml` only when code first uses it
 - **Byte-exact round trip**: never normalize unedited lines (terminators, tabs, trailing spaces, invalid UTF-8)
 - **Small commits**: each one builds and passes `scripts/check`
 
@@ -124,10 +124,10 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 
 100% test coverage is a hard acceptance criterion. No task is done and no commit is acceptable while coverage is below 100%. Code that cannot be covered is redesigned until it can, not excluded. Details in `IMPLEMENTATION_PLAN.md` §9.
 
-- Unit tests: per module, in `#[cfg(test)]` modules; property tests (`proptest`) for the gap buffer, line index, cell mapping, key-name round trip and CLI parser
+- Unit tests: per module, in `#[cfg(test)] #[coverage(off)]` modules (the crate root needs `#![cfg_attr(test, feature(coverage_attribute))]`); property tests (`proptest`) for the gap buffer, line index, cell mapping, key-name round trip and CLI parser
 - Scenario tests: `tests/scenarios/*.mep-test`, run by a harness in `mep-core` without a terminal; keys given as function or key names, with `expect` sections for files, cursor, clipboard, frame, message and status
 - Platform tests: file I/O and line endings on all three OSes; the clipboard adapter has an `#[ignore]` integration test for manual runs on a desktop session
-- Test coverage requirements: 100% lines, functions and regions, gated by `cargo llvm-cov` in `scripts/check` on each platform; the only exclusions are the three OS glue files, and adding one needs the owner's OK
+- Test coverage requirements: 100% lines, functions, regions and branches, gated by `cargo llvm-cov --branch` in `scripts/check` on each platform; the only exclusions are the three OS glue files and test code itself, and adding a file needs the owner's OK
 - No `unreachable!()`, `todo!()` or `unimplemented!()` in non-test code; express invariants through types
 - Every error path is reached by a test through in-memory fakes (`Fs` with injectable failures, failing `SystemClipboard`, failing `impl Write`)
 - Tests assert behavior, not just execution
@@ -151,7 +151,7 @@ Load the `rust-build-commands` skill when building or running the project.
 
 Project overrides of the skill:
 
-- No `anyhow` and no `clap`: only the crates in `IMPLEMENTATION_PLAN.md` §4.3 are allowed. Errors use `std::io::Result`, `bool` returns for commands, or project error types
+- `anyhow` and `clap` are allowed. Commands still return `bool` (§0 rule 5); `anyhow` is for fallible operations outside the command interface
 - Every crate root carries `#![allow(clippy::bool_comparison)]` for the explicit `== true` / `== false` style
 - The `require!` macro is added to a crate only when that crate first uses it
 

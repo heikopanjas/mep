@@ -4,6 +4,7 @@
 //! system, the environment or the system clipboard directly.
 
 #![forbid(unsafe_code)]
+#![cfg_attr(test, feature(coverage_attribute))]
 #![allow(clippy::bool_comparison)]
 
 /// Returns the MEP version shared by all workspace crates
@@ -13,6 +14,7 @@ pub fn version() -> &'static str
 }
 
 #[cfg(test)]
+#[coverage(off)]
 mod tests
 {
     use super::*;

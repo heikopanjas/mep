@@ -13,7 +13,7 @@ Handoff document for the coding agent. Read it completely before writing code. E
 5. **No panics on user input.** Every command returns `bool` (the original `flagType` TRUE/FALSE) because macros branch on it. Failure = `false` + message on the dialog line.
 6. **Dependencies.** Only the crates named in §4.3. Any additional crate (runtime or dev) needs a one-line justification in the PR/commit message and the owner's OK.
 7. Small commits, each building and passing `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` and the coverage gate (§9.1) on Windows, macOS and Linux.
-8. **100% test coverage is a hard acceptance criterion** (§9). No task is done and no commit is acceptable while coverage is below 100%. Code that cannot be covered by a test is redesigned until it can, not excluded. The only exclusions are the OS glue files fixed in §9.1.
+8. **100% test coverage is a hard acceptance criterion** (§9). No task is done and no commit is acceptable while coverage is below 100%. Code that cannot be covered by a test is redesigned until it can, not excluded. The only exclusions are the OS glue files fixed in §9.1 and test code itself.
 
 ---
 
@@ -70,7 +70,8 @@ All in `docs/sources/` (see `docs/sources/README.md` for conventions):
 - Opening `<clipboard>` with `setfile` shows the **current** system clipboard contents.
 
 ### 3.4 Implementation
-- **Rust**, stable toolchain, edition 2024. Cargo workspace (§4).
+- **Rust**, nightly toolchain pinned to a dated version in `rust-toolchain.toml` (currently `nightly-2026-10-31`), edition 2024. Cargo workspace (§4). The pin moves only on purpose, in its own commit. Nightly is required by `.rustfmt.toml`.
+- **License**: MIT (`LICENSE`).
 - Own **byte-based gap buffer** (not `ropey`, which requires valid UTF-8).
 - `crossterm` for terminal I/O on all platforms; `clipboard-rs` for the system clipboard; `libloading` for extensions (M4).
 - Extensions use a **C ABI** (M4) so they can be written in C like the originals.
@@ -85,7 +86,7 @@ All in `docs/sources/` (see `docs/sources/README.md` for conventions):
 ```
 mep/
 ├── Cargo.toml              # workspace
-├── rust-toolchain.toml     # channel = "stable", components = ["llvm-tools-preview"]
+├── rust-toolchain.toml     # channel = "nightly-YYYY-MM-DD", components = ["clippy", "llvm-tools-preview", "rustfmt"]
 ├── scripts/check           # fmt + clippy + test + coverage gate (sh and .ps1)
 ├── crates/
 │   ├── mep-core/           # all editor logic; no terminal, no OS clipboard
@@ -146,10 +147,12 @@ The editor is a state machine: `Editor::handle(event) -> Outcome` (`Continue` / 
 | `regex` / `fancy-regex` | M2, mep-core | Regex backend after dialect translation (§10) |
 | `tempfile` (dev) | tests | Temp dirs for file I/O tests |
 | `proptest` (dev) | mep-core tests | Property tests for gap buffer and cell mapping |
+| `anyhow` | any crate | Error handling for fallible operations outside the command interface (commands still return `bool`, §0 rule 5) |
+| `clap` | mep | Command-line parsing (§6.1) |
 
 Hash for the clipboard record: implement FNV-1a 64 yourself (a few lines) rather than adding a crate.
 
-Command-line parsing is hand-written (§6.1); no `clap`.
+Command-line parsing uses `clap` (§6.1).
 
 Tool (not a crate dependency): `cargo-llvm-cov` for coverage measurement and the gate (§9.1).
 
@@ -230,11 +233,11 @@ mep [options] [file ...]
   --                         end of options; all following arguments are files
 ```
 - Short and long options work on **all** systems. `--execute=<command>` is accepted as well as `--execute <command>`.
-- On Windows, the original forms `/d`, `/e <command>` and `/t` are accepted in addition (case-insensitive). On macOS/Linux there are no `/` options, because `/e…` collides with absolute paths.
-- Short options are not bundled (`-dt` is an error).
+- Options start with `-` or `--` on **all** systems, Windows included. The original `/d`, `/e`, `/t` forms are **not** accepted; an argument starting with `/` is always a file name.
+- Short flags may be bundled (`-dt` = `-d -t`).
 - `-e` may be given several times; the commands run in order.
 - Unknown option or missing `<command>`: message and usage to stderr, exit code 2.
-- The parser is a pure function (`args → Result<CliOptions, CliError>`) in `mep-core` so every case is unit-tested.
+- The parser lives in the `mep` binary crate (`crates/mep/src/cli.rs`) and is a pure function (`args → Result<CliOptions, CliError>`, built on `clap`'s `try_parse_from`) so every case is unit-tested.
 - No file: reopen the last edited file (M3; in M1 start with an empty untitled buffer).
 - Several files: `exit` walks the list (§6.10).
 
@@ -447,7 +450,7 @@ Order matters. Every task's "done when" **implicitly includes**: tests green on 
 | 17 | **Macros** (`macros`, §6.14) + `execute` + `lasttext`. | Tests reproduce the MSJ examples (`savefile`, `print` structure with `shell` stubbed, `bigprint`/`selectall` open-arg chain), jumps, labels, recursion limit. |
 | 18 | **Multiple files** (§6.10): file list from CLI, `setfile` variants, `autosave`, `exit` walking the list, `refresh`, `askexit`. | Scenario tests. |
 | 19 | **Text insertion functions** (`curdate` …). | Tests with injected clock/env. |
-| 20 | **Front end** (§7) and binary wiring, CLI (§6.1). | Key conversion, frame diff and color mapping fully unit-tested; `run(...)` tested with fakes; every CLI case tested (each option short/long/Windows form, `--execute=`, repeated `-e`, `--`, bundling error, unknown option, missing argument, help, version). Manual checklist below passes on Windows Terminal, macOS Terminal/iTerm2/Ghostty, a Linux terminal. |
+| 20 | **Front end** (§7) and binary wiring, CLI (§6.1). | Key conversion, frame diff and color mapping fully unit-tested; `run(...)` tested with fakes; every CLI case tested (each option short/long form, a `/`-prefixed argument treated as a file, `--execute=`, repeated `-e`, `--`, bundled short flags, unknown option, missing argument, help, version). Manual checklist below passes on Windows Terminal, macOS Terminal/iTerm2/Ghostty, a Linux terminal. |
 
 **M1 acceptance:**
 - `scripts/check` passes on Windows, macOS and Linux, including the coverage gate at 100% lines, functions and regions.
@@ -489,14 +492,18 @@ Order matters. Every task's "done when" **implicitly includes**: tests green on 
 The gate is part of `scripts/check` and CI and runs on **each** platform separately (platform-specific `cfg` code is covered on its own platform):
 
 ```
-cargo llvm-cov --workspace \
+cargo llvm-cov --workspace --branch --no-report
+cargo llvm-cov report --branch \
   --ignore-filename-regex '(mep-term[/\\]src[/\\]sys\.rs|mep-clip[/\\]src[/\\]system\.rs|mep[/\\]src[/\\]main\.rs)$' \
   --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
+# plus: zero uncovered branches in `cargo llvm-cov report --branch --json --summary-only`
+# (cargo-llvm-cov has no --fail-under-branches)
 ```
 
 Rules:
 - **Exclusions are exactly these three files** (§7). They contain only calls into the OS, no logic. Adding a file to the list requires the owner's OK. The Linux clipboard path in `system.rs` is additionally exercised by an `#[ignore]` integration test run manually.
-- 100% **lines, functions and regions**. Branch coverage is not available on stable Rust and is not gated.
+- 100% **lines, functions, regions and branches**. Branch coverage needs nightly (`--branch`); the toolchain is pinned to a nightly (§3.4).
+- **Test code is not measured**: every crate root with unit tests has `#![cfg_attr(test, feature(coverage_attribute))]` and every test module `#[cfg(test)] #[coverage(off)]`. Otherwise each assertion adds a branch that a passing test never takes. Integration test crates put `#![feature(coverage_attribute)]` and `#![coverage(off)]` at their root.
 - No `unreachable!()` / `todo!()` / `unimplemented!()` arms in non-test code: they are uncovered regions by definition. Express invariants through types instead.
 - Every error path is reached by a test: I/O failures through the in-memory `Fs`, clipboard failures through a failing fake `SystemClipboard`, terminal write failures through a failing `impl Write`.
 - Tests assert behavior, not just execution: a test that runs code without checking its result does not count as coverage in review.

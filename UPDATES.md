@@ -4,6 +4,33 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-10-31 (v0.1.0, branch coverage gate, cli parser in mep)
+
+- the coverage gate also requires 100% branch coverage; the check scripts collect with --branch and fail when the json summary reports any uncovered branch
+- test modules are excluded from coverage with coverage(off), enabled through a test-only coverage_attribute feature gate
+- bundled short command-line flags are accepted
+- the cli parser moves from mep-core to the mep binary crate, so clap stays out of the core
+- rationale: owner decisions; cargo-llvm-cov has no branch threshold option, and assertions in tests add branches a passing test never takes
+- version bump: none (build configuration and plan only)
+
+### 2026-10-31 (v0.1.0, mit license, pinned nightly, dash-only cli)
+
+- licensed the project under mit with a LICENSE file and license metadata in all crates
+- pinned rust-toolchain.toml to nightly-2026-10-31
+- command-line options use only - and -- on all systems; the original slash forms are dropped and a slash argument is always a file
+- updated implementation_plan.md for the nightly pin, the license, anyhow and clap in the allowed crates, and the dash-only cli
+- rationale: owner decisions; a dated nightly keeps ci from breaking on a new nightly without a code change
+- version bump: none (license and build configuration only)
+
+### 2026-10-31 (v0.1.0, nightly toolchain and anyhow clap)
+
+- switched rust-toolchain.toml to nightly with clippy, llvm-tools-preview and rustfmt; check scripts and ci use the toolchain file only
+- added anyhow and clap to the allowed crates
+- check.ps1 calls cargo directly with a quoted double dash and checks the exit code after each step
+- rationale: owner decision; nightly also makes .rustfmt.toml effective without a separate fmt toolchain
+- rationale: switching toolchains left stale llvm-cov data that produced bogus reports; a full cargo llvm-cov clean fixes it
+- version bump: none (build configuration only)
+
 ### 2026-10-31 (v0.1.0, m1 task 1 workspace setup)
 
 - created the cargo workspace with mep-core, mep-term, mep-clip and mep crates, a stable rust-toolchain.toml with clippy and llvm-tools-preview, and a committed Cargo.lock

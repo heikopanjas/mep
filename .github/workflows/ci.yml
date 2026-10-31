@@ -13,10 +13,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install toolchains
-        run: |
-          rustup toolchain install
-          rustup toolchain install nightly --profile minimal --component rustfmt
+      - name: Install toolchain from rust-toolchain.toml
+        run: rustup toolchain install
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov

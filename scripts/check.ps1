@@ -1,10 +1,7 @@
-# Runs fmt, clippy, tests and the 100% coverage gate (IMPLEMENTATION_PLAN.md §9.1).
+# Runs fmt, clippy, tests and the 100% coverage gate (lines, functions, regions, branches) (IMPLEMENTATION_PLAN.md §9.1).
 #
 # Usage: scripts/check.ps1 [--report]
 #   --report  also write an HTML coverage report to target/llvm-cov/html
-#
-# Formatting uses nightly rustfmt because .rustfmt.toml relies on options that
-# stable rustfmt ignores. Everything else runs on the stable toolchain.
 
 $ErrorActionPreference = 'Stop'
 
@@ -27,23 +24,39 @@ Set-Location (Join-Path $PSScriptRoot '..')
 # The only files excluded from coverage: OS glue without logic (§7).
 $ignore = '(mep-term[/\\]src[/\\]sys\.rs|mep-clip[/\\]src[/\\]system\.rs|mep[/\\]src[/\\]main\.rs)$'
 
-# '--' is quoted at call sites: PowerShell would otherwise swallow it as its own end-of-parameters marker.
-function Invoke-Step
+# Native commands do not throw on failure; stop at the first non-zero exit code.
+function Assert-Success
 {
-    & $args[0] $args[1..($args.Count - 1)]
     if ($LASTEXITCODE -ne 0)
     {
         exit $LASTEXITCODE
     }
 }
 
-Invoke-Step cargo +nightly fmt --all '--' --check
-Invoke-Step cargo clippy --workspace --all-targets --locked '--' -D warnings
-Invoke-Step cargo test --workspace --doc --locked
-Invoke-Step cargo llvm-cov clean --workspace
-Invoke-Step cargo llvm-cov --workspace --locked --no-report
-Invoke-Step cargo llvm-cov report --ignore-filename-regex $ignore --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
+# '--' is quoted so PowerShell passes it to cargo instead of treating it as its own end-of-parameters marker.
+cargo fmt --all '--' --check
+Assert-Success
+cargo clippy --workspace --all-targets --locked '--' -D warnings
+Assert-Success
+cargo test --workspace --doc --locked
+Assert-Success
+cargo llvm-cov clean --workspace
+Assert-Success
+cargo llvm-cov --workspace --branch --locked --no-report
+Assert-Success
+cargo llvm-cov report --branch --ignore-filename-regex $ignore --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
+Assert-Success
+# cargo-llvm-cov has no branch threshold; read the missed branches from the summary.
+$summary = cargo llvm-cov report --branch --json --summary-only --ignore-filename-regex $ignore
+Assert-Success
+$missed = (($summary -join "`n") | ConvertFrom-Json).data[0].totals.branches.notcovered
+if ($missed -ne 0)
+{
+    [Console]::Error.WriteLine("error: $missed branches not covered")
+    exit 1
+}
 if ($report)
 {
-    Invoke-Step cargo llvm-cov report --ignore-filename-regex $ignore --html
+    cargo llvm-cov report --branch --ignore-filename-regex $ignore --html
+    Assert-Success
 }
