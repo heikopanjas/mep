@@ -33,7 +33,7 @@ Non-goals for now: syntax highlighting, GUI, mouse support, Z editor behavior, t
 - **Package Manager:** Cargo workspace (`crates/mep-core`, `crates/mep-term`, `crates/mep-clip`, `crates/mep`); `Cargo.lock` is committed
 - **Version manifest:** `[workspace.package] version` in the root `Cargo.toml`; all crates inherit it
 - **Coverage tool:** `cargo-llvm-cov`
-- **Check script:** `scripts/check` (sh, needs `jq`) and `scripts/check.ps1` (Windows), optional `--report` for an HTML coverage report in `target/llvm-cov/html`
+- **Check script:** `scripts/check.sh` (Linux, macOS; needs `jq`) and `scripts/check.ps1` (Windows), optional `--report` for an HTML coverage report in `target/llvm-cov/html`
 - **CI:** `.github/workflows/ci.yml` runs the check script on Ubuntu, macOS and Windows
 - **License:** MIT (`LICENSE`, `license = "MIT"` in the workspace manifest)
 
@@ -95,7 +95,7 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 1. **Maintain Consistency**: Keep code style consistent across the codebase
 2. **Test First**: Write tests before implementing features when applicable
 3. **Document Changes**: Update documentation when changing functionality
-4. **Code Review**: The owner reviews every change before it is committed. A commit must build and pass `scripts/check` (fmt, clippy, tests, coverage gate) on Windows, macOS and Linux
+4. **Code Review**: The owner reviews every change before it is committed. A commit must build and pass the check script (fmt, clippy, tests, coverage gate) on Windows, macOS and Linux
 5. **Date Changes**: Update the "Last updated" timestamp in this file when making changes
 6. **Log Updates**: Add entries to the "Recent Updates & Decisions" log in `UPDATES.md`
 
@@ -110,7 +110,8 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - **OS glue files** (`mep-term/src/sys.rs`, `mep-clip/src/system.rs`, `mep/src/main.rs`) contain only calls into the OS, no logic
 - **Dependencies**: only the crates listed in `IMPLEMENTATION_PLAN.md` §4.3, which include `anyhow` and `clap`. Any other crate, runtime or dev, needs a one-line justification and the owner's OK. FNV-1a 64 is implemented in-house. A crate is added to a `Cargo.toml` only when code first uses it
 - **Byte-exact round trip**: never normalize unedited lines (terminators, tabs, trailing spaces, invalid UTF-8)
-- **Small commits**: each one builds and passes `scripts/check`
+- **Small commits**: each one builds and passes the check script
+- **Script names**: shell scripts for Linux and macOS end in `.sh`, PowerShell scripts for Windows in `.ps1`
 
 ### Security & Safety
 
@@ -127,7 +128,7 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - Unit tests: per module, in `#[cfg(test)] #[coverage(off)]` modules (the crate root needs `#![cfg_attr(test, feature(coverage_attribute))]`); property tests (`proptest`) for the gap buffer, line index, cell mapping, key-name round trip and CLI parser
 - Scenario tests: `tests/scenarios/*.mep-test`, run by a harness in `mep-core` without a terminal; keys given as function or key names, with `expect` sections for files, cursor, clipboard, frame, message and status
 - Platform tests: file I/O and line endings on all three OSes; the clipboard adapter has an `#[ignore]` integration test for manual runs on a desktop session
-- Test coverage requirements: 100% lines, functions, regions and branches, gated by `cargo llvm-cov --branch` in `scripts/check` on each platform; the only exclusions are the three OS glue files and test code itself, and adding a file needs the owner's OK
+- Test coverage requirements: 100% lines, functions, regions and branches, gated by `cargo llvm-cov --branch` in the check script on each platform; the only exclusions are the three OS glue files and test code itself, and adding a file needs the owner's OK
 - No `unreachable!()`, `todo!()` or `unimplemented!()` in non-test code; express invariants through types
 - Every error path is reached by a test through in-memory fakes (`Fs` with injectable failures, failing `SystemClipboard`, failing `impl Write`)
 - Tests assert behavior, not just execution

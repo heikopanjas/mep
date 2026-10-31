@@ -4,6 +4,13 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-10-31 (v0.1.0, sh extension for shell scripts)
+
+- renamed scripts/check to scripts/check.sh and updated ci, agents.md and the implementation plan
+- shell scripts for linux and macos end in .sh, powershell scripts for windows in .ps1
+- rationale: owner decision; the extension shows which platform a script is for
+- version bump: none (build tooling only)
+
 ### 2026-10-31 (v0.1.0, branch coverage gate, cli parser in mep)
 
 - the coverage gate also requires 100% branch coverage; the check scripts collect with --branch and fail when the json summary reports any uncovered branch

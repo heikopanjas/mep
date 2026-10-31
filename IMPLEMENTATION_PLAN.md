@@ -87,7 +87,8 @@ All in `docs/sources/` (see `docs/sources/README.md` for conventions):
 mep/
 ├── Cargo.toml              # workspace
 ├── rust-toolchain.toml     # channel = "nightly-YYYY-MM-DD", components = ["clippy", "llvm-tools-preview", "rustfmt"]
-├── scripts/check           # fmt + clippy + test + coverage gate (sh and .ps1)
+├── scripts/check.sh        # fmt + clippy + test + coverage gate (Linux, macOS)
+├── scripts/check.ps1       # the same for Windows
 ├── crates/
 │   ├── mep-core/           # all editor logic; no terminal, no OS clipboard
 │   ├── mep-term/           # crossterm front end: Terminal trait impl, key decoding
@@ -431,7 +432,7 @@ Order matters. Every task's "done when" **implicitly includes**: tests green on 
 
 | # | Task | Done when |
 |---|---|---|
-| 1 | **Workspace setup**: crates, toolchain file (incl. `llvm-tools-preview`), fmt/clippy config, `docs/` structure, `scripts/check` (sh + PowerShell) running fmt, clippy, tests and the coverage gate; CI running the same script on Windows, macOS and Linux. | Empty crates build; the coverage gate runs and passes on all three platforms. |
+| 1 | **Workspace setup**: crates, toolchain file (incl. `llvm-tools-preview`), fmt/clippy config, `docs/` structure, `scripts/check.sh` and `scripts/check.ps1` running fmt, clippy, tests and the coverage gate; CI running the same script on Windows, macOS and Linux. | Empty crates build; the coverage gate runs and passes on all three platforms. |
 | 2 | **Gap buffer** (`gap`). | Unit + property tests: random insert/delete sequences match a `Vec<u8>` model. |
 | 3 | **Line index and terminators** (`lines`, §5.1). | Load→save round-trip byte-exact for LF, CRLF, mixed, no final newline, empty file, invalid UTF-8. |
 | 4 | **Cell model** (`cells`, §3.2, §5.2). | Tests for ASCII, wide CJK, combining marks, invalid bytes, tabs: cell↔byte mapping both directions, box edge splitting a wide char. |
@@ -453,7 +454,7 @@ Order matters. Every task's "done when" **implicitly includes**: tests green on 
 | 20 | **Front end** (§7) and binary wiring, CLI (§6.1). | Key conversion, frame diff and color mapping fully unit-tested; `run(...)` tested with fakes; every CLI case tested (each option short/long form, a `/`-prefixed argument treated as a file, `--execute=`, repeated `-e`, `--`, bundled short flags, unknown option, missing argument, help, version). Manual checklist below passes on Windows Terminal, macOS Terminal/iTerm2/Ghostty, a Linux terminal. |
 
 **M1 acceptance:**
-- `scripts/check` passes on Windows, macOS and Linux, including the coverage gate at 100% lines, functions and regions.
+- The check scripts pass on Windows, macOS and Linux, including the coverage gate at 100% lines, functions, regions and branches.
 - Every command spec file in `docs/spec/commands/` has scenario tests for every accepted arg kind, the `meta` form, and at least one rejected arg kind.
 - Every switch in §6.13 has tests for its default, a valid value, and an invalid value.
 - Every key name in the default table round-trips through parser and printer.
@@ -489,7 +490,7 @@ Order matters. Every task's "done when" **implicitly includes**: tests green on 
 
 ### 9.1 Coverage gate (hard acceptance criterion)
 
-The gate is part of `scripts/check` and CI and runs on **each** platform separately (platform-specific `cfg` code is covered on its own platform):
+The gate is part of the check scripts (`scripts/check.sh`, `scripts/check.ps1`) and CI and runs on **each** platform separately (platform-specific `cfg` code is covered on its own platform):
 
 ```
 cargo llvm-cov --workspace --branch --no-report
@@ -507,7 +508,7 @@ Rules:
 - No `unreachable!()` / `todo!()` / `unimplemented!()` arms in non-test code: they are uncovered regions by definition. Express invariants through types instead.
 - Every error path is reached by a test: I/O failures through the in-memory `Fs`, clipboard failures through a failing fake `SystemClipboard`, terminal write failures through a failing `impl Write`.
 - Tests assert behavior, not just execution: a test that runs code without checking its result does not count as coverage in review.
-- A coverage report (`cargo llvm-cov --html`) is produced by `scripts/check --report` for finding gaps.
+- A coverage report (`cargo llvm-cov --html`) is produced by `scripts/check.sh --report` (or `scripts/check.ps1 --report`) for finding gaps.
 
 ### 9.2 Unit and property tests
 Per module. Property tests (`proptest`) for the gap buffer, line index, cell mapping, key-name round-trip and the CLI parser.

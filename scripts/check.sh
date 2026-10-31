@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs fmt, clippy, tests and the 100% coverage gate (lines, functions, regions, branches) (IMPLEMENTATION_PLAN.md §9.1).
 #
-# Usage: scripts/check [--report]
+# Usage: scripts/check.sh [--report]
 #   --report  also write an HTML coverage report to target/llvm-cov/html
 
 set -eu
@@ -11,7 +11,7 @@ for arg in "$@"; do
     case "$arg" in
         --report) report=true ;;
         *)
-            echo "usage: scripts/check [--report]" >&2
+            echo "usage: scripts/check.sh [--report]" >&2
             exit 2
             ;;
     esac
