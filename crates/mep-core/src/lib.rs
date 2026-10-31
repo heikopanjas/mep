@@ -7,6 +7,25 @@
 #![cfg_attr(test, feature(coverage_attribute))]
 #![allow(clippy::bool_comparison)]
 
+/// Early-return guard macro for precondition checks
+///
+/// Returns the given expression when the condition is false.
+/// Works with any return type: `Result`, `Option`, or bare values.
+#[macro_export]
+macro_rules! require {
+    ($cond:expr, $ret:expr) => {
+        if ($cond) == false
+        {
+            return $ret;
+        }
+    };
+}
+
+mod gap;
+
+pub use anyhow::Result;
+pub use gap::GapBuffer;
+
 /// Returns the MEP version shared by all workspace crates
 pub fn version() -> &'static str
 {

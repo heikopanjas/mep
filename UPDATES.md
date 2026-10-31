@@ -4,6 +4,16 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-10-31 (v0.2.0, m1 task 2 gap buffer)
+
+- added GapBuffer in mep-core: byte storage with insert and delete at a byte offset and slice access, bytes kept unchanged including invalid utf-8
+- slices returns the parts before and after the gap as two slices, so reads work on a shared reference and never move the gap
+- the gap grows to at least the content size with a 64 byte minimum, so storage at least doubles and inserts cost amortized constant time
+- out-of-range offsets and reversed ranges return an anyhow error and leave the buffer unchanged
+- mep-core re-exports anyhow Result and defines the require macro
+- unit tests plus proptest property tests compare random insert and delete sequences against a Vec model
+- version bump: 0.1.0 to 0.2.0 (MINOR - new gap buffer api)
+
 ### 2026-10-31 (v0.1.0, sh extension for shell scripts)
 
 - renamed scripts/check to scripts/check.sh and updated ci, agents.md and the implementation plan

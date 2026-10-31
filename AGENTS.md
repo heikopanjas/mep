@@ -133,6 +133,7 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - Every error path is reached by a test through in-memory fakes (`Fs` with injectable failures, failing `SystemClipboard`, failing `impl Write`)
 - Tests assert behavior, not just execution
 - Testing framework: built-in `cargo test`, `proptest`, `tempfile`
+- `proptest-regressions/` files from real failures are committed; seeds produced only by placeholder code during the red phase of test-first work are deleted
 
 ### Documentation
 
