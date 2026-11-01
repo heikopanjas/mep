@@ -52,7 +52,7 @@ impl Editor
     pub(crate) fn load_extension(&mut self, value: &str) -> Result<()>
     {
         let name = FileName::parse(value, &self.env.cwd());
-        let path = name.path().ok_or_else(|| anyhow!("{value}: cannot load extension: not a file name"))?.to_path_buf();
+        let path = name.path().ok_or_else(|| anyhow!("{value}: cannot load extension: not a file name"))?.clone();
         require!(self.loaded.contains(&path) == false, Ok(()));
         let host = self.host.clone();
         let extension = host.load(&path).map_err(|error| anyhow!("{value}: cannot load extension: {error}"))?;
@@ -319,7 +319,7 @@ impl ExtApi for Editor
     fn file_read(&mut self, name: &str, file: usize) -> bool
     {
         require!(self.file_of(file).is_some(), false);
-        let Some(path) = FileName::parse(name, &self.env.cwd()).path().map(|path| path.to_path_buf())
+        let Some(path) = FileName::parse(name, &self.env.cwd()).path().cloned()
         else
         {
             // A pseudo-file has nothing on disk (MSJ WhenLoaded).
@@ -340,7 +340,7 @@ impl ExtApi for Editor
 
     fn file_write(&mut self, name: &str, file: usize) -> bool
     {
-        let path = FileName::parse(name, &self.env.cwd()).path().map(|path| path.to_path_buf());
+        let path = FileName::parse(name, &self.env.cwd()).path().cloned();
         let data = self.file_of(file).and_then(|id| self.files.get(id)).map(|file| file.text.to_bytes());
         let (Some(path), Some(data)) = (path, data)
         else

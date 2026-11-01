@@ -2,11 +2,11 @@
 
 use std::{
     io::{self, Read},
-    path::Path,
     process::{Command, Stdio}
 };
 
 use mep_core::{
+    Utf8TypedPathBuf,
     env::{Env, Os},
     run::{Ran, Runner}
 };
@@ -63,10 +63,10 @@ pub struct OsRunner(pub Os);
 
 impl Runner for OsRunner
 {
-    fn capture(&self, line: &str, cwd: &Path, stdout_only: bool) -> io::Result<Ran>
+    fn capture(&self, line: &str, cwd: &Utf8TypedPathBuf, stdout_only: bool) -> io::Result<Ran>
     {
         let mut command = shell_command(self.0, line);
-        command.current_dir(cwd).stdin(Stdio::null());
+        command.current_dir(cwd.as_str()).stdin(Stdio::null());
         if stdout_only == true
         {
             let output = command.stderr(Stdio::null()).output()?;
@@ -120,13 +120,15 @@ mod tests
     {
         let dir = tempfile::TempDir::new().unwrap();
         let runner = OsRunner(Os::Linux);
-        let ran = runner.capture("echo one; echo two >&2; pwd", dir.path(), false).unwrap();
+        let cwd = Os::Linux.path(&dir.path().to_string_lossy());
+        let missing = cwd.join("missing");
+        let ran = runner.capture("echo one; echo two >&2; pwd", &cwd, false).unwrap();
         let text = String::from_utf8(ran.output).unwrap();
         assert!(ran.success);
         assert!(text.starts_with("one\ntwo\n"), "{text}");
-        let stdout = runner.capture("echo out; echo err >&2; exit 3", dir.path(), true).unwrap();
+        let stdout = runner.capture("echo out; echo err >&2; exit 3", &cwd, true).unwrap();
         assert_eq!((stdout.success, stdout.output.as_slice()), (false, b"out\n".as_slice()));
-        assert!(runner.capture("true", &dir.path().join("missing"), false).is_err());
-        assert!(runner.capture("true", &dir.path().join("missing"), true).is_err());
+        assert!(runner.capture("true", &missing, false).is_err());
+        assert!(runner.capture("true", &missing, true).is_err());
     }
 }

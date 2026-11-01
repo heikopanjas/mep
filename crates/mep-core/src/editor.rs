@@ -6,9 +6,10 @@
 
 use std::{
     collections::{HashMap, VecDeque},
-    path::PathBuf,
     rc::Rc
 };
+
+use typed_path::Utf8TypedPathBuf;
 
 use crate::{
     clip::{Clip, ClipboardPayload, Shape},
@@ -248,7 +249,7 @@ pub(crate) enum Then
     /// A save finished; continue with `after`
     Saved
     {
-        file: FileId, path: PathBuf, after: After
+        file: FileId, path: Utf8TypedPathBuf, after: After
     },
     /// Ask for a new name for a read-only file
     SaveAs
@@ -418,7 +419,7 @@ pub struct Editor
     pub(crate) bell:          bool,
     pub(crate) ext_functions: HashMap<&'static str, (&'static Desc, usize)>,
     pub(crate) ext_switches:  HashMap<String, (SwitchKind, usize)>,
-    pub(crate) loaded:        Vec<PathBuf>,
+    pub(crate) loaded:        Vec<Utf8TypedPathBuf>,
     pub(crate) exe:           String,
     pub(crate) cols:          u16,
     pub(crate) rows:          u16,

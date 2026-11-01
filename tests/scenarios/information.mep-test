@@ -91,7 +91,7 @@ a
 -- close
 -- expect quit
 -- expect disk /data/mep/mep.tmp
-/work/a.txt\t0\t0\t0\t0
+\work\a.txt\t0\t0\t0\t0
 
 == name: confirmed exit writes the information file
 -- env XDG_CONFIG_HOME=/cfg

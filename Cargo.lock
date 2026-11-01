@@ -510,7 +510,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "mep"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "clap",
  "mep-clip",
@@ -525,7 +525,7 @@ dependencies = [
 
 [[package]]
 name = "mep-clip"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "clipboard-rs",
  "mep-core",
@@ -533,17 +533,18 @@ dependencies = [
 
 [[package]]
 name = "mep-core"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "anyhow",
  "proptest",
  "regex",
+ "typed-path",
  "unicode-width",
 ]
 
 [[package]]
 name = "mep-ext"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "libloading",
  "mep-core",
@@ -551,7 +552,7 @@ dependencies = [
 
 [[package]]
 name = "mep-term"
-version = "0.15.0"
+version = "0.15.1"
 dependencies = [
  "crossterm",
  "mep-core",
@@ -1194,6 +1195,12 @@ dependencies = [
  "nom",
  "petgraph",
 ]
+
+[[package]]
+name = "typed-path"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
 
 [[package]]
 name = "unarray"

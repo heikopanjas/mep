@@ -12,7 +12,6 @@
 use std::{
     ffi::OsString,
     io::{self, Write},
-    path::Path,
     rc::Rc,
     sync::{Arc, Condvar, Mutex, mpsc::Sender},
     thread,
@@ -21,7 +20,7 @@ use std::{
 
 use mep::{Platform, process::OsRunner, run};
 use mep_core::{
-    Event,
+    Event, Utf8TypedPathBuf,
     clip::{ClipboardPayload, SystemClipboard},
     env::{FixedEnv, Os},
     io::{FileMeta, Fs},
@@ -62,33 +61,33 @@ struct BlockingFs
 
 impl Fs for BlockingFs
 {
-    fn read(&self, path: &Path) -> io::Result<Vec<u8>>
+    fn read(&self, path: &Utf8TypedPathBuf) -> io::Result<Vec<u8>>
     {
         self.latch.wait();
         self.inner.read(path)
     }
 
-    fn write_atomic(&self, path: &Path, data: &[u8]) -> io::Result<()>
+    fn write_atomic(&self, path: &Utf8TypedPathBuf, data: &[u8]) -> io::Result<()>
     {
         self.inner.write_atomic(path, data)
     }
 
-    fn rename(&self, from: &Path, to: &Path) -> io::Result<()>
+    fn rename(&self, from: &Utf8TypedPathBuf, to: &Utf8TypedPathBuf) -> io::Result<()>
     {
         self.inner.rename(from, to)
     }
 
-    fn metadata(&self, path: &Path) -> io::Result<FileMeta>
+    fn metadata(&self, path: &Utf8TypedPathBuf) -> io::Result<FileMeta>
     {
         self.inner.metadata(path)
     }
 
-    fn read_dir_names(&self, dir: &Path) -> io::Result<Vec<OsString>>
+    fn read_dir_names(&self, dir: &Utf8TypedPathBuf) -> io::Result<Vec<OsString>>
     {
         self.inner.read_dir_names(dir)
     }
 
-    fn create_dir_all(&self, dir: &Path) -> io::Result<()>
+    fn create_dir_all(&self, dir: &Utf8TypedPathBuf) -> io::Result<()>
     {
         self.inner.create_dir_all(dir)
     }

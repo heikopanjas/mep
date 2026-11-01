@@ -12,7 +12,7 @@ use crate::{
 /// Returns the file type shown on the status line, from the extension
 fn file_type(name: &FileName) -> &'static str
 {
-    let extension = name.path().and_then(|path| path.extension()).map(|extension| extension.to_string_lossy().to_lowercase());
+    let extension = name.path().and_then(|path| path.extension()).map(str::to_lowercase);
     match extension.as_deref()
     {
         | Some("c" | "h") => "C",

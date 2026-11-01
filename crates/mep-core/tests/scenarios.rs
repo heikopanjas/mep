@@ -5,7 +5,7 @@
 //!
 //! Setup sections:
 //! - `-- tools.ini`, `-- file NAME [crlf] [noeol] [readonly]`, `-- clipboard [record SHAPE | unavailable]`
-//! - `-- args NAME …`, `-- size COLS ROWS`, `-- env NAME=VALUE`, `-- os windows|macos|linux`
+//! - `-- args NAME …`, `-- size COLS ROWS`, `-- env NAME=VALUE`, `-- os windows|macos|linux` (also the path style: `\work\a.txt` on Windows)
 //! - `-- slice N`, `-- notoolsini`, `-- temporary`, `-- execute TEXT` (a startup `-e` command)
 //! - `-- readkeys KEY…`: keys an extension reads with `ReadChar`/`ReadCmd` after the typed-ahead ones; `load:…/probe.so` loads the scripted `probe` extension, whose
 //!   text argument is a callback command (see `probe`)
@@ -39,9 +39,9 @@ use std::{
 };
 
 use mep_core::{
-    Editor, Event, Startup,
+    Editor, Event, Startup, Utf8TypedPathBuf,
     clip::{Clip, ClipboardPayload, MemClipboard, Shape},
-    env::{FixedEnv, Os},
+    env::{Env, FixedEnv, Os},
     ext::{self, ExtApi, ExtArg, ExtFunction, ExtSwitch, Extension, SwitchKind, SwitchValue},
     file::FileName,
     host::Host,
@@ -204,7 +204,7 @@ fn probe(api: &mut dyn ExtApi, command: &str) -> String
 
 impl Runner for Fake
 {
-    fn capture(&self, command: &str, _: &Path, _: bool) -> io::Result<Ran>
+    fn capture(&self, command: &str, _: &Utf8TypedPathBuf, _: bool) -> io::Result<Ran>
     {
         self.log.borrow_mut().push(format!("run: {command}"));
         let (success, output) = self.scripts.get(command).cloned().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("{command}: not found")))?;
@@ -239,19 +239,19 @@ impl Host for Fake
         self.note(format!("keyboard {hooked}"));
     }
 
-    fn load(&self, path: &Path) -> Result<Extension, String>
+    fn load(&self, path: &Utf8TypedPathBuf) -> Result<Extension, String>
     {
         let switch = |name: &str, kind, id| ExtSwitch { name: name.into(), kind, id };
         let function = |name: &str, flags, id| ExtFunction { name: name.into(), flags, id };
         let all = ext::flags::ALL & !(ext::flags::CURSORFUNC | ext::flags::WINDOWFUNC | ext::flags::BOXSTR | ext::flags::NULLEOL | ext::flags::NULLEOW);
-        match path.file_name().and_then(|name| name.to_str())
+        match path.file_name()
         {
             | Some("probe.so") => Ok(Extension {
                 id:        7,
                 functions: vec![function("Probe", all, 0), function("psearch", ext::flags::NOARG, 1), function("probebox", ext::flags::BOXSTR, 2)],
                 switches:  vec![switch("probeflag", SwitchKind::Boolean, 0), switch("probenum", SwitchKind::Numeric, 1), switch("probetext", SwitchKind::Special, 2)]
             }),
-            | _ => Err(format!("{}: no such library", path.display()))
+            | _ => Err(format!("{}: no such library", path))
         }
     }
 
@@ -504,12 +504,12 @@ fn run_case(case: &Case) -> Vec<String>
             | ["tools.ini"] => drop(fs.write_file("/ini/tools.ini", section.body.join("\n").as_bytes())),
             | ["file", name, flags @ ..] =>
             {
-                let path = Path::new("/work").join(name);
+                let path = in_work(name);
                 let flags: Vec<String> = flags.iter().map(|flag| flag.to_string()).collect();
                 fs.write_file(&path, &body_bytes(&section.body, &flags));
                 if flags.iter().any(|flag| flag == "readonly")
                 {
-                    fs.set_readonly(path, true);
+                    fs.set_readonly(&path, true);
                 }
             }
             | ["clipboard", rest @ ..] =>
@@ -581,6 +581,8 @@ fn run_case(case: &Case) -> Vec<String>
         }
     }
     let startup = Startup { cols, rows, exe: "mep".into(), files: args, execute, tools_ini, temporary };
+    // Names in expectations resolve like the editor's own, with the separators of the scenario's OS.
+    let cwd = env.cwd();
     let mut editor = Editor::new(Box::new(env), startup);
     if let Some(lines) = slice
     {
@@ -640,8 +642,8 @@ fn run_case(case: &Case) -> Vec<String>
                 let want = body_bytes(&section.body, &flags);
                 let got = match head[1]
                 {
-                    | "file" => run.editor.buffer(&FileName::parse(name, Path::new("/work"))),
-                    | _ => run.fake.fs.file(Path::new("/work").join(name))
+                    | "file" => run.editor.buffer(&FileName::parse(name, &cwd)),
+                    | _ => run.fake.fs.file(&in_work(name))
                 };
                 if got.as_deref() != Some(want.as_slice())
                 {
@@ -731,7 +733,7 @@ fn run_case(case: &Case) -> Vec<String>
             }
             | ["expect", "current", name] =>
             {
-                let want = FileName::parse(name, Path::new("/work"));
+                let want = FileName::parse(name, &cwd);
                 if run.editor.current_name() != want
                 {
                     failures.push(fail("current", &want, &run.editor.current_name()));
@@ -748,8 +750,8 @@ fn run_case(case: &Case) -> Vec<String>
                     | "createdir" => Op::CreateDir,
                     | _ => Op::ReadDir
                 };
-                run.fake.fs.fail(op, Path::new("/work").join(name));
-                run.fake.fs.fail(op, Path::new(name));
+                run.fake.fs.fail(op, &in_work(name));
+                run.fake.fs.fail(op, name);
             }
             | ["resize", c, r] => run.event(Event::Resize(c.parse().unwrap(), r.parse().unwrap())),
             | ["close"] => run.event(Event::Close),
@@ -840,13 +842,19 @@ fn scenarios()
 /// Writes a file into a MemFs, for fixtures
 trait WriteFile
 {
-    fn write_file(&self, path: impl AsRef<Path>, bytes: &[u8]) -> bool;
+    fn write_file(&self, path: &str, bytes: &[u8]) -> bool;
 }
 
 impl WriteFile for MemFs
 {
-    fn write_file(&self, path: impl AsRef<Path>, bytes: &[u8]) -> bool
+    fn write_file(&self, path: &str, bytes: &[u8]) -> bool
     {
-        mep_core::io::Fs::write_atomic(self, path.as_ref(), bytes).is_ok()
+        mep_core::io::Fs::write_atomic(self, &Utf8TypedPathBuf::from_unix(path), bytes).is_ok()
     }
+}
+
+/// Returns the in-memory file system key of `name` relative to the working directory `/work`
+fn in_work(name: &str) -> String
+{
+    Utf8TypedPathBuf::from_unix("/work").join(name).into_string()
 }

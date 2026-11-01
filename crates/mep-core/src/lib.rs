@@ -52,6 +52,7 @@ pub use cmd::is_function;
 pub use editor::{Editor, Event, Outcome, Startup};
 pub use gap::GapBuffer;
 pub use text::{Terminator, Text};
+pub use typed_path::Utf8TypedPathBuf;
 
 /// Returns the MEP version shared by all workspace crates
 pub fn version() -> &'static str

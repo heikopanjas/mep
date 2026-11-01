@@ -4,6 +4,16 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.15.1, typed paths in the core)
+
+- added typed-path 0.12.3 to mep-core, pinned because 0.12.4 and 0.13.0 are younger than two weeks; the owner approved it
+- the core keeps paths as typed-path utf-8 paths in the style of env os instead of std paths in the style of the host; Os::path builds them, the binary converts to std paths in os.rs, host.rs and process.rs
+- resolve is now join plus normalize; history parse takes the os; memfs keys files by their slash form so fixtures match unix and windows paths
+- scenarios with os windows now show windows paths such as backslash work backslash a.txt
+- local_offset builds the zone file path as a string, so its test passes on windows
+- rationale: the first windows ci run failed because std joins with a backslash on windows while the tests use unix paths; typed paths make path logic independent of the host
+- version bump: 0.15.0 to 0.15.1 (PATCH - windows path fix, no new features)
+
 ### 2026-11-01 (v0.15.0, no fail fast in the check scripts)
 
 - check.sh and check.ps1 run the doc tests and the coverage test run with --no-fail-fast

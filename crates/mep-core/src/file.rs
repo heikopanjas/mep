@@ -1,6 +1,6 @@
 //! Open files and pseudo-files (IMPLEMENTATION_PLAN.md §5.1, §5.6)
 
-use std::path::{Component, Path, PathBuf};
+use typed_path::Utf8TypedPathBuf;
 
 use crate::{Text, io::Loaded};
 
@@ -9,7 +9,7 @@ use crate::{Text, io::Loaded};
 pub enum FileName
 {
     /// A file on disk, as an absolute path
-    Disk(PathBuf),
+    Disk(Utf8TypedPathBuf),
     /// A pseudo-file such as `<clipboard>`, stored without the angle brackets
     Pseudo(String)
 }
@@ -17,7 +17,7 @@ pub enum FileName
 impl FileName
 {
     /// Parses a name typed by the user: `<name>` is a pseudo-file, anything else a path relative to `cwd`
-    pub fn parse(name: &str, cwd: &Path) -> Self
+    pub fn parse(name: &str, cwd: &Utf8TypedPathBuf) -> Self
     {
         match name.strip_prefix('<').and_then(|rest| rest.strip_suffix('>'))
         {
@@ -31,13 +31,13 @@ impl FileName
     {
         match self
         {
-            | Self::Disk(path) => path.display().to_string(),
+            | Self::Disk(path) => path.to_string(),
             | Self::Pseudo(name) => format!("<{name}>")
         }
     }
 
     /// Returns the path of a disk file
-    pub fn path(&self) -> Option<&Path>
+    pub fn path(&self) -> Option<&Utf8TypedPathBuf>
     {
         match self
         {
@@ -48,22 +48,9 @@ impl FileName
 }
 
 /// Makes `name` absolute against `cwd` and removes `.` and `..` components without touching the disk
-pub fn resolve(cwd: &Path, name: &str) -> PathBuf
+pub fn resolve(cwd: &Utf8TypedPathBuf, name: &str) -> Utf8TypedPathBuf
 {
-    let mut path = PathBuf::new();
-    // components() already drops `.` inside a path; the working directory is absolute.
-    for component in cwd.join(name).components()
-    {
-        if component == Component::ParentDir
-        {
-            path.pop();
-        }
-        else
-        {
-            path.push(component);
-        }
-    }
-    path
+    cwd.join(name).normalize()
 }
 
 /// One open file or pseudo-file
@@ -179,28 +166,32 @@ mod tests
     #[test]
     fn test_resolve_relative_and_absolute_names()
     {
-        let cwd = Path::new("/home/u/src");
-        assert_eq!(resolve(cwd, "a.c"), PathBuf::from("/home/u/src/a.c"));
-        assert_eq!(resolve(cwd, "./x/../b.c"), PathBuf::from("/home/u/src/b.c"));
-        assert_eq!(resolve(cwd, "../../../../etc/p"), PathBuf::from("/etc/p"));
-        assert_eq!(resolve(cwd, "/tmp/c.c"), PathBuf::from("/tmp/c.c"));
+        let cwd = &Utf8TypedPathBuf::from("/home/u/src");
+        assert_eq!(resolve(cwd, "a.c"), Utf8TypedPathBuf::from("/home/u/src/a.c"));
+        assert_eq!(resolve(cwd, "./x/../b.c"), Utf8TypedPathBuf::from("/home/u/src/b.c"));
+        assert_eq!(resolve(cwd, "../../../../etc/p"), Utf8TypedPathBuf::from("/etc/p"));
+        assert_eq!(resolve(cwd, "/tmp/c.c"), Utf8TypedPathBuf::from("/tmp/c.c"));
+        let cwd = &Utf8TypedPathBuf::from_windows(r"C:\src\mep");
+        assert_eq!(resolve(cwd, r"..\a.c").as_str(), r"C:\src\a.c");
+        assert_eq!(resolve(cwd, "x/b.c").as_str(), r"C:\src\mep\x\b.c");
+        assert_eq!(resolve(cwd, r"D:\c.c").as_str(), r"D:\c.c");
     }
 
     #[test]
     fn test_parse_pseudo_and_disk_names()
     {
-        let cwd = Path::new("/w");
+        let cwd = &Utf8TypedPathBuf::from("/w");
         assert_eq!(FileName::parse("<clipboard>", cwd), FileName::Pseudo("clipboard".into()));
-        assert_eq!(FileName::parse("a.txt", cwd), FileName::Disk(PathBuf::from("/w/a.txt")));
-        assert_eq!(FileName::parse("<odd", cwd), FileName::Disk(PathBuf::from("/w/<odd")));
+        assert_eq!(FileName::parse("a.txt", cwd), FileName::Disk(Utf8TypedPathBuf::from("/w/a.txt")));
+        assert_eq!(FileName::parse("<odd", cwd), FileName::Disk(Utf8TypedPathBuf::from("/w/<odd")));
     }
 
     #[test]
     fn test_display_and_path()
     {
-        let disk = FileName::Disk(PathBuf::from("/w/a.txt"));
+        let disk = FileName::Disk(Utf8TypedPathBuf::from("/w/a.txt"));
         assert_eq!(disk.display(), "/w/a.txt");
-        assert_eq!(disk.path(), Some(Path::new("/w/a.txt")));
+        assert_eq!(disk.path(), Some(&Utf8TypedPathBuf::from("/w/a.txt")));
         let pseudo = FileName::Pseudo("clipboard".into());
         assert_eq!(pseudo.display(), "<clipboard>");
         assert_eq!(pseudo.path(), None);

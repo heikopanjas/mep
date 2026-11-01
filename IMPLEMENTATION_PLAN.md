@@ -166,6 +166,7 @@ The editor is a state machine: `Editor::handle(event) -> Outcome` (`Continue` / 
 | `signal-hook` | mep, Unix only (M4) | Ignoring SIGINT/SIGQUIT/SIGTSTP in the editor while `shell` runs a program (`mep/src/sys.rs`) |
 | `windows-sys` | mep, Windows only (M4) | `SetConsoleCtrlHandler` for the same on Windows (`mep/src/sys.rs`) |
 | `regex` | M2, mep-core | Regular expressions in the crate's own syntax (§10) |
+| `typed-path` | mep-core | Unix and Windows paths chosen by `Env::os()` instead of the host, so path logic and tests behave the same on every platform; held at 0.12.3 (0.12.4 and 0.13.0 are younger than two weeks) |
 | `tempfile` (dev) | tests | Temp dirs for file I/O tests |
 | `proptest` (dev) | mep-core tests | Property tests for gap buffer and cell mapping |
 | `anyhow` | any crate | Error handling for fallible operations outside the command interface (commands still return `bool`, §0 rule 5) |

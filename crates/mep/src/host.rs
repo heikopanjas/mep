@@ -5,14 +5,14 @@ use std::{
     cell::RefCell,
     collections::VecDeque,
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::Path,
     process::Command,
     rc::Rc,
     sync::{Arc, Mutex, PoisonError, mpsc::Receiver}
 };
 
 use mep_core::{
-    Event,
+    Event, Utf8TypedPathBuf,
     clip::SystemClipboard,
     env::Os,
     ext::{ExtApi, ExtArg, Extension, SwitchValue},
@@ -95,7 +95,7 @@ pub struct TerminalHost
     /// The interactive shell
     pub interactive: String,
     /// Working directory
-    pub cwd:         PathBuf,
+    pub cwd:         Utf8TypedPathBuf,
     /// The file system, for extension callbacks
     pub fs:          Arc<dyn Fs + Send + Sync>,
     /// The system clipboard, for extension callbacks
@@ -122,7 +122,7 @@ impl Host for TerminalHost
             runs.push(Command::new(&self.interactive));
         }
         // Every command runs, even after one failed.
-        let results: Vec<bool> = runs.iter_mut().map(|command| command.current_dir(&self.cwd).status().is_ok_and(|status| status.success())).collect();
+        let results: Vec<bool> = runs.iter_mut().map(|command| command.current_dir(self.cwd.as_str()).status().is_ok_and(|status| status.success())).collect();
         drop(quiet);
         if wait == true
         {
@@ -160,9 +160,9 @@ impl Host for TerminalHost
         }
     }
 
-    fn load(&self, path: &Path) -> Result<Extension, String>
+    fn load(&self, path: &Utf8TypedPathBuf) -> Result<Extension, String>
     {
-        self.extensions.load(path)
+        self.extensions.load(Path::new(path.as_str()))
     }
 
     fn init(&self, library: usize, api: &mut dyn ExtApi)
@@ -232,7 +232,7 @@ mod tests
             out:         SharedOut::new(Box::new(out.clone())),
             os:          Os::Linux,
             interactive: "true".into(),
-            cwd:         std::env::temp_dir(),
+            cwd:         Utf8TypedPathBuf::from(std::env::temp_dir().to_string_lossy().as_ref()),
             fs:          Arc::new(MemFs::default().with_file("/a.txt", b"a")),
             clipboard:   Arc::new(Mutex::new(Box::new(MemClipboard::default()))),
             runner:      Arc::new(OsRunner(Os::Linux)),
@@ -266,7 +266,14 @@ mod tests
         let host = host(&calls, &Shared::default(), incoming);
         let loaded = host.serve(Request { id: 4, kind: RequestKind::Load("/a.txt".into()) }).unwrap();
         assert!(matches!(loaded.reply, Reply::Loaded(Ok(ref file)) if file.bytes == b"a"));
-        let ran = host.run(Run { id: 5, command: "exit 0".into(), cwd: std::env::temp_dir(), stdout_only: true }).unwrap();
+        let ran = host
+            .run(Run {
+                id:          5,
+                command:     "exit 0".into(),
+                cwd:         Utf8TypedPathBuf::from(std::env::temp_dir().to_string_lossy().as_ref()),
+                stdout_only: true
+            })
+            .unwrap();
         assert_eq!(ran.id, 5);
         let key = Key::plain(KeyCode::Char('k'));
         events.send(Event::Resize(1, 2)).unwrap();
@@ -282,6 +289,6 @@ mod tests
         assert!(host.inbox.next(true).is_none());
         host.keyboard(false);
         host.keyboard(true);
-        assert!(host.load(Path::new("/no/such/library.so")).is_err());
+        assert!(host.load(&Utf8TypedPathBuf::from("/no/such/library.so")).is_err());
     }
 }

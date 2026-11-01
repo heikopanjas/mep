@@ -3,9 +3,10 @@
 //! A compile runs in the background. Its output goes into `<compile>`; the
 //! lines that name a file and a row are the messages `compile` steps through.
 
-use std::{io, path::Path, sync::LazyLock};
+use std::{io, sync::LazyLock};
 
 use regex::Regex;
+use typed_path::Utf8TypedPathBuf;
 
 use crate::{
     editor::{After, Arg, Editor, Step},
@@ -48,7 +49,7 @@ static FORMS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 
 /// Reads the messages from compiler output; relative names are relative to `cwd`
 // ORACLE: COMPILE-1
-pub(crate) fn parse(output: &[u8], cwd: &Path) -> Vec<Message>
+pub(crate) fn parse(output: &[u8], cwd: &Utf8TypedPathBuf) -> Vec<Message>
 {
     let text = String::from_utf8_lossy(output);
     text.lines()
@@ -78,7 +79,7 @@ pub(crate) fn compile(ed: &mut Editor, arg: Arg) -> Step
         | (other, _) =>
         {
             let text = other.into_text();
-            let extension = Path::new(&text).extension().map(|extension| extension.to_string_lossy().to_lowercase()).unwrap_or_default();
+            let extension = ed.env.os().path(&text).extension().map(str::to_lowercase).unwrap_or_default();
             let found = ed.switches.extmake.get(&extension).or_else(|| ed.switches.extmake.get("text")).cloned();
             match found
             {
@@ -101,13 +102,13 @@ impl Editor
     fn compile_current(&mut self) -> Step
     {
         let file = self.file();
-        let Some(path) = file.name.path().map(Path::to_path_buf)
+        let Some(path) = file.name.path().cloned()
         else
         {
             return self.fail("No file name");
         };
-        let extension = path.extension().map(|extension| extension.to_string_lossy().to_lowercase()).unwrap_or_default();
-        let Some(command) = self.switches.extmake.get(&extension).map(|command| command.replace("%s", &path.display().to_string()))
+        let extension = path.extension().map(str::to_lowercase).unwrap_or_default();
+        let Some(command) = self.switches.extmake.get(&extension).map(|command| command.replace("%s", path.as_str()))
         else
         {
             return self.fail(&format!("No extmake command for .{extension}"));
@@ -202,7 +203,7 @@ mod tests
 
     fn one(line: &str) -> Option<(String, usize, usize, String)>
     {
-        parse(line.as_bytes(), Path::new("/w")).first().map(|message| (message.file.display(), message.pos.line, message.pos.col, message.text.clone()))
+        parse(line.as_bytes(), &Utf8TypedPathBuf::from("/w")).first().map(|message| (message.file.display(), message.pos.line, message.pos.col, message.text.clone()))
     }
 
     #[test]

@@ -86,7 +86,7 @@ impl Editor
     pub(crate) fn mark_continue(&mut self, name: &str, answer: Answer) -> Step
     {
         let markfile = FileName::parse(&self.switches.markfile, &self.env.cwd());
-        let dir = markfile.path().and_then(|path| path.parent()).map(|dir| dir.to_path_buf()).unwrap_or_default();
+        let dir = markfile.path().and_then(|path| path.parent()).map(|dir| dir.to_path_buf()).unwrap_or(self.env.cwd());
         let text = match answer
         {
             | Answer::Reply(Reply::Loaded(Ok(loaded))) => String::from_utf8_lossy(&loaded.bytes).into_owned(),

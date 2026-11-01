@@ -1,6 +1,6 @@
 //! TOOLS.INI search path and sections (IMPLEMENTATION_PLAN.md §6.12; M guide Chapter 7 p. 55–65)
 
-use std::path::PathBuf;
+use typed_path::Utf8TypedPathBuf;
 
 use crate::env::{Env, Os};
 
@@ -18,14 +18,14 @@ pub struct Statement
 ///
 /// The directories listed in `INIT`, then `%APPDATA%\mep` (Windows) or
 /// `$XDG_CONFIG_HOME/mep` / `~/.config/mep` (macOS, Linux), then the home directory.
-pub fn search_dirs(env: &dyn Env) -> Vec<PathBuf>
+pub fn search_dirs(env: &dyn Env) -> Vec<Utf8TypedPathBuf>
 {
     let os = env.os();
-    let var = |name: &str| env.var(name).map(PathBuf::from);
+    let var = |name: &str| env.var(name).map(|value| os.path(&value.to_string_lossy()));
     // INIT, not USER: on Unix, USER is the login name (trap T1).
-    let mut dirs: Vec<PathBuf> = env
+    let mut dirs: Vec<Utf8TypedPathBuf> = env
         .var("INIT")
-        .map(|list| list.to_string_lossy().split(os.list_separator()).filter(|dir| dir.is_empty() == false).map(PathBuf::from).collect())
+        .map(|list| list.to_string_lossy().split(os.list_separator()).filter(|dir| dir.is_empty() == false).map(|dir| os.path(dir)).collect())
         .unwrap_or_default();
     let home = match os
     {
@@ -39,10 +39,11 @@ pub fn search_dirs(env: &dyn Env) -> Vec<PathBuf>
 
 /// Returns the editor's configuration directory: `%APPDATA%\mep` (Windows) or
 /// `$XDG_CONFIG_HOME/mep` / `~/.config/mep` (macOS, Linux)
-pub fn config_dir(env: &dyn Env) -> Option<PathBuf>
+pub fn config_dir(env: &dyn Env) -> Option<Utf8TypedPathBuf>
 {
-    let var = |name: &str| env.var(name).map(PathBuf::from);
-    let config = match env.os()
+    let os = env.os();
+    let var = |name: &str| env.var(name).map(|value| os.path(&value.to_string_lossy()));
+    let config = match os
     {
         | Os::Windows => var("APPDATA"),
         | _ => var("XDG_CONFIG_HOME").or_else(|| var("HOME").map(|home| home.join(".config")))
@@ -84,7 +85,7 @@ pub fn section(content: &str, tag: &str) -> Vec<Statement>
 #[coverage(off)]
 mod tests
 {
-    use std::{collections::HashMap, ffi::OsString, path::Path};
+    use std::{collections::HashMap, ffi::OsString};
 
     use super::*;
     use crate::env::LocalDateTime;
@@ -112,9 +113,9 @@ mod tests
             self.os
         }
 
-        fn cwd(&self) -> PathBuf
+        fn cwd(&self) -> Utf8TypedPathBuf
         {
-            PathBuf::from("/")
+            self.os.path("/")
         }
     }
 
@@ -127,16 +128,21 @@ mod tests
     fn test_search_order_on_unix()
     {
         let env = env(Os::Linux, &[("INIT", "/a::/b"), ("HOME", "/home/u"), ("USER", "/not/a/dir")]);
-        assert_eq!(search_dirs(&env), vec![PathBuf::from("/a"), PathBuf::from("/b"), PathBuf::from("/home/u/.config/mep"), PathBuf::from("/home/u")]);
+        assert_eq!(search_dirs(&env), vec![
+            Utf8TypedPathBuf::from("/a"),
+            Utf8TypedPathBuf::from("/b"),
+            Utf8TypedPathBuf::from("/home/u/.config/mep"),
+            Utf8TypedPathBuf::from("/home/u")
+        ]);
         assert_eq!(env.now().year, 1987);
-        assert_eq!(env.cwd(), Path::new("/"));
+        assert_eq!(env.cwd(), Utf8TypedPathBuf::from("/"));
     }
 
     #[test]
     fn test_xdg_config_home_wins_on_unix()
     {
         let env = env(Os::MacOs, &[("XDG_CONFIG_HOME", "/cfg"), ("HOME", "/home/u")]);
-        assert_eq!(search_dirs(&env), vec![PathBuf::from("/cfg/mep"), PathBuf::from("/home/u")]);
+        assert_eq!(search_dirs(&env), vec![Utf8TypedPathBuf::from("/cfg/mep"), Utf8TypedPathBuf::from("/home/u")]);
     }
 
     #[test]
@@ -144,10 +150,10 @@ mod tests
     {
         let env = env(Os::Windows, &[("INIT", "C:\\init;D:\\x"), ("APPDATA", "C:\\Users\\u\\AppData\\Roaming"), ("USERPROFILE", "C:\\Users\\u")]);
         assert_eq!(search_dirs(&env), vec![
-            PathBuf::from("C:\\init"),
-            PathBuf::from("D:\\x"),
-            PathBuf::from("C:\\Users\\u\\AppData\\Roaming").join("mep"),
-            PathBuf::from("C:\\Users\\u")
+            Utf8TypedPathBuf::from("C:\\init"),
+            Utf8TypedPathBuf::from("D:\\x"),
+            Utf8TypedPathBuf::from("C:\\Users\\u\\AppData\\Roaming").join("mep"),
+            Utf8TypedPathBuf::from("C:\\Users\\u")
         ]);
     }
 

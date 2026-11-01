@@ -2,6 +2,8 @@
 
 use std::io::ErrorKind;
 
+use typed_path::Utf8TypedPathBuf;
+
 use crate::{
     clip::Clip,
     edit::clip_text,
@@ -153,7 +155,7 @@ impl Editor
         {
             | Some(path) =>
             {
-                let id = self.request(RequestKind::Load(path.to_path_buf()));
+                let id = self.request(RequestKind::Load(path.clone()));
                 Step::Wait(Pending::Request { id, then: Then::Open { name } })
             }
             | None => self.install(File::new(name, self.platform_crlf()))
@@ -183,7 +185,7 @@ impl Editor
     /// Saves a file under its own name, then continues with `after`
     pub(crate) fn save(&mut self, file: FileId, after: After) -> Step
     {
-        let Some(path) = self.files.get(file).and_then(|file| file.name.path()).map(|path| path.to_path_buf())
+        let Some(path) = self.files.get(file).and_then(|file| file.name.path()).cloned()
         else
         {
             return self.fail("No file name: use arg arg name setfile");
@@ -194,7 +196,7 @@ impl Editor
     }
 
     /// Writes the current file's contents to another file; the current file is unchanged
-    fn write_copy(&mut self, path: std::path::PathBuf) -> Step
+    fn write_copy(&mut self, path: Utf8TypedPathBuf) -> Step
     {
         let data = self.file().text.save_bytes(self.switches.entab_mode(), self.switches.trailspace);
         let id = self.request(RequestKind::Save { path: path.clone(), data, backup: self.switches.backup == Backup::Bak });
@@ -247,7 +249,7 @@ impl Editor
                         Step::Wait(Pending::Prompt { prompt: "File is read-only. Save as: ".into(), edit: Default::default(), then: Then::SaveAs { file, after } }),
                     | false => self.fail("readonly command: not available in this version")
                 },
-            | (Then::Saved { path, .. }, Answer::Reply(Reply::Saved(Err(error)))) => self.fail(&format!("{}: {error}", path.display())),
+            | (Then::Saved { path, .. }, Answer::Reply(Reply::Saved(Err(error)))) => self.fail(&format!("{}: {error}", path)),
             | (Then::SaveAs { file, after }, Answer::Name(name)) =>
             {
                 let name = FileName::parse(&name, &self.env.cwd());
@@ -278,7 +280,7 @@ impl Editor
     }
 
     /// Finishes a save: clears the modified state for the file's own name and continues
-    fn saved(&mut self, file: FileId, path: &std::path::Path, after: After) -> Step
+    fn saved(&mut self, file: FileId, path: &Utf8TypedPathBuf, after: After) -> Step
     {
         if let After::Copied = after
         {
@@ -287,7 +289,7 @@ impl Editor
         let saved = self.file_at(file);
         saved.modified = false;
         saved.text.clear_edited();
-        self.info(&format!("Saved {}", path.display()));
+        self.info(&format!("Saved {}", path));
         match after
         {
             | After::Switch(target) => self.switch_now(target),

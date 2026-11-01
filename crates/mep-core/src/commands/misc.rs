@@ -219,7 +219,7 @@ pub(crate) fn curfile(ed: &mut Editor, _: Arg) -> Step
 /// Splits a file name into base name and extension with its dot
 fn split_name(name: &FileName) -> (String, String)
 {
-    match name.path().and_then(|path| path.file_name()).map(|name| name.to_string_lossy().into_owned())
+    match name.path().and_then(|path| path.file_name()).map(str::to_string)
     {
         | Some(file) => match file.rfind('.')
         {
@@ -333,7 +333,7 @@ impl Editor
                     {
                         if let Err(error) = self.apply(&statement.text)
                         {
-                            errors.push(format!("{} line {}: {error}", path.display(), statement.line));
+                            errors.push(format!("{} line {}: {error}", path, statement.line));
                         }
                     }
                 }

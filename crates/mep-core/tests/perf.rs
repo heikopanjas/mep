@@ -8,10 +8,7 @@
 #![coverage(off)]
 #![allow(clippy::bool_comparison)]
 
-use std::{
-    path::Path,
-    time::{Duration, Instant}
-};
+use std::time::{Duration, Instant};
 
 use mep_core::{
     Editor, Event, Outcome, Startup,
@@ -192,5 +189,5 @@ fn perf_saving_hands_over_one_copy()
     });
     check("prepare a save of the whole document", took, Duration::from_secs(1));
     assert_eq!(outcome.requests.len(), 1);
-    assert!(fs.file(Path::new("/work/big.txt")).is_some());
+    assert!(fs.file("/work/big.txt").is_some());
 }

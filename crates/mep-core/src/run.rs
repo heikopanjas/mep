@@ -3,10 +3,9 @@
 //! The core never starts processes. It emits a [`Run`]; a job thread runs it
 //! with [`execute`] and a [`Runner`] and sends back a [`Completion`].
 
-use std::{
-    io,
-    path::{Path, PathBuf}
-};
+use std::io;
+
+use typed_path::Utf8TypedPathBuf;
 
 use crate::io::{Completion, Reply, RequestId};
 
@@ -19,7 +18,7 @@ pub struct Run
     /// Command line for the system shell
     pub command:     String,
     /// Working directory
-    pub cwd:         PathBuf,
+    pub cwd:         Utf8TypedPathBuf,
     /// Capture standard output only and discard standard error; otherwise both through one pipe
     pub stdout_only: bool
 }
@@ -42,7 +41,7 @@ pub trait Runner
     /// # Errors
     ///
     /// Returns the operating system error if the shell cannot be started.
-    fn capture(&self, command: &str, cwd: &Path, stdout_only: bool) -> io::Result<Ran>;
+    fn capture(&self, command: &str, cwd: &Utf8TypedPathBuf, stdout_only: bool) -> io::Result<Ran>;
 }
 
 /// Runs `run` with `runner`

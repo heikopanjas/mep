@@ -317,7 +317,7 @@ mod tests
 
     impl Runner for Echo
     {
-        fn capture(&self, command: &str, _: &std::path::Path, _: bool) -> io::Result<mep_core::run::Ran>
+        fn capture(&self, command: &str, _: &mep_core::Utf8TypedPathBuf, _: bool) -> io::Result<mep_core::run::Ran>
         {
             Ok(mep_core::run::Ran { success: true, output: format!("a.txt:1:{command}\n").into_bytes() })
         }

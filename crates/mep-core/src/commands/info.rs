@@ -1,6 +1,6 @@
 //! The information file and the `information` command (docs/spec/commands/information.md; M guide p. 38, p. 97)
 
-use std::path::PathBuf;
+use typed_path::Utf8TypedPathBuf;
 
 use crate::{
     edit::text_length,
@@ -24,7 +24,7 @@ pub(crate) fn information(ed: &mut Editor, _: Arg) -> Step
     }
     for entry in ed.history.iter().filter(|entry| ed.files.find(&FileName::Disk(entry.path.clone())).is_none())
     {
-        text.push_str(&format!("{}\n", entry.path.display()));
+        text.push_str(&format!("{}\n", entry.path));
     }
     let id = ed.fill_pseudo("information", text.into_bytes());
     ed.switch(Switch::To(id))
@@ -49,7 +49,7 @@ impl Editor
     }
 
     /// Returns the information file: `<config dir>/<exe>.tmp`
-    fn history_path(&self) -> Option<PathBuf>
+    fn history_path(&self) -> Option<Utf8TypedPathBuf>
     {
         ini::config_dir(self.env.as_ref()).map(|dir| dir.join(format!("{}.tmp", self.exe)))
     }
@@ -71,7 +71,7 @@ impl Editor
     {
         if let Answer::Reply(Reply::Loaded(Ok(loaded))) = answer
         {
-            self.history = history::parse(&String::from_utf8_lossy(&loaded.bytes));
+            self.history = history::parse(&String::from_utf8_lossy(&loaded.bytes), self.env.os());
         }
         match (self.file_list.is_empty(), self.history.first())
         {
@@ -99,7 +99,7 @@ impl Editor
     pub(crate) fn remember(&mut self, id: FileId, name: &FileName)
     {
         let lines = self.files.get(id).map_or(0, |file| file.text.line_count());
-        let found = self.history.iter().find(|entry| Some(entry.path.as_path()) == name.path()).map(|entry| entry.view);
+        let found = self.history.iter().find(|entry| Some(&entry.path) == name.path()).map(|entry| entry.view);
         if let Some(view) = found &&
             view.cursor.line < lines
         {
@@ -118,7 +118,7 @@ impl Editor
             return;
         };
         let current = self.current;
-        let mut open: Vec<_> = self.files.iter().filter_map(|(id, file)| file.name.path().map(|path| (id, path.to_path_buf()))).collect();
+        let mut open: Vec<_> = self.files.iter().filter_map(|(id, file)| file.name.path().map(|path| (id, path.clone()))).collect();
         // A stable sort keeps the other files in order behind the current one.
         open.sort_by_key(|(id, _)| *id != current);
         let recent = open.into_iter().map(|(id, path)| Entry { path, view: self.shown_view(id) }).collect();

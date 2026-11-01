@@ -3,23 +3,26 @@
 //! One file per line as `path<TAB>line<TAB>column<TAB>top<TAB>left`, most
 //! recent first, positions 0-based (ORACLE INFO-1).
 
-use std::path::PathBuf;
+use typed_path::Utf8TypedPathBuf;
 
-use crate::view::{Pos, View};
+use crate::{
+    env::Os,
+    view::{Pos, View}
+};
 
 /// A remembered file with its cursor and window position
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Entry
 {
     /// The file
-    pub path: PathBuf,
+    pub path: Utf8TypedPathBuf,
     /// Its cursor and window position
     pub view: View
 }
 
-/// Reads the entries of an information file; malformed lines are skipped
+/// Reads the entries of an information file as paths of `os`; malformed lines are skipped
 // ORACLE: INFO-1
-pub fn parse(text: &str) -> Vec<Entry>
+pub fn parse(text: &str, os: Os) -> Vec<Entry>
 {
     text.lines()
         .filter_map(|line| {
@@ -28,7 +31,7 @@ pub fn parse(text: &str) -> Vec<Entry>
             let numbers: Vec<usize> = fields.map(|field| field.parse().ok()).collect::<Option<_>>()?;
             match numbers.as_slice()
             {
-                | [line, col, top, left] => Some(Entry { path: PathBuf::from(path), view: View { top: *top, left: *left, cursor: Pos::new(*line, *col) } }),
+                | [line, col, top, left] => Some(Entry { path: os.path(path), view: View { top: *top, left: *left, cursor: Pos::new(*line, *col) } }),
                 | _ => None
             }
         })
@@ -42,7 +45,7 @@ pub fn format(entries: &[Entry]) -> String
         .iter()
         .map(|entry| {
             let view = entry.view;
-            format!("{}\t{}\t{}\t{}\t{}\n", entry.path.display(), view.cursor.line, view.cursor.col, view.top, view.left)
+            format!("{}\t{}\t{}\t{}\t{}\n", entry.path, view.cursor.line, view.cursor.col, view.top, view.left)
         })
         .collect()
 }
@@ -70,7 +73,7 @@ mod tests
 
     fn entry(path: &str, line: usize) -> Entry
     {
-        Entry { path: PathBuf::from(path), view: View { top: line, left: 0, cursor: Pos::new(line, 1) } }
+        Entry { path: Utf8TypedPathBuf::from_unix(path), view: View { top: line, left: 0, cursor: Pos::new(line, 1) } }
     }
 
     #[test]
@@ -79,13 +82,14 @@ mod tests
         let entries = vec![entry("/a b.txt", 3), entry("/c", 0)];
         let text = format(&entries);
         assert_eq!(text, "/a b.txt\t3\t1\t3\t0\n/c\t0\t1\t0\t0\n");
-        assert_eq!(parse(&text), entries);
+        assert_eq!(parse(&text, Os::Linux), entries);
+        assert_eq!(parse("C:\\a.txt\t1\t2\t3\t4\n", Os::Windows)[0].path.as_str(), "C:\\a.txt");
     }
 
     #[test]
     fn test_malformed_lines_are_skipped()
     {
-        assert!(parse("\n/a\t1\t2\t3\n/a\t1\t2\t3\t4\t5\n/a\tx\t2\t3\t4\n\t1\t2\t3\t4\n").is_empty());
+        assert!(parse("\n/a\t1\t2\t3\n/a\t1\t2\t3\t4\t5\n/a\tx\t2\t3\t4\n\t1\t2\t3\t4\n", Os::Linux).is_empty());
     }
 
     #[test]

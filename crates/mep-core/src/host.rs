@@ -5,7 +5,7 @@
 //! and waits. The host also serves requests at once for extensions, whose
 //! callbacks cannot wait for a completion event.
 
-use std::path::Path;
+use typed_path::Utf8TypedPathBuf;
 
 use crate::{
     ext::{ExtApi, ExtArg, Extension, SwitchValue},
@@ -39,7 +39,7 @@ pub trait Host
     /// # Errors
     ///
     /// Returns why the library cannot be loaded.
-    fn load(&self, path: &Path) -> Result<Extension, String>;
+    fn load(&self, path: &Utf8TypedPathBuf) -> Result<Extension, String>;
 
     /// Runs `WhenLoaded` of a loaded library, after its functions are known
     fn init(&self, library: usize, api: &mut dyn ExtApi);
@@ -81,7 +81,7 @@ impl Host for NoHost
     {
     }
 
-    fn load(&self, _: &Path) -> Result<Extension, String>
+    fn load(&self, _: &Utf8TypedPathBuf) -> Result<Extension, String>
     {
         Err("extensions are not available".into())
     }
@@ -117,7 +117,7 @@ mod tests
         assert!(host.run(Run { id: 2, command: "true".into(), cwd: "/".into(), stdout_only: false }).is_none());
         assert!(host.read_key().is_none());
         host.keyboard(false);
-        assert_eq!(host.load(Path::new("x.so")), Err("extensions are not available".to_string()));
+        assert_eq!(host.load(&Utf8TypedPathBuf::from("x.so")), Err("extensions are not available".to_string()));
         let startup =
             Startup { cols: 40, rows: 8, exe: "mep".into(), files: Vec::new(), execute: Vec::new(), tools_ini: false, temporary: true };
         let mut editor = Editor::new(Box::new(FixedEnv::default()), startup);

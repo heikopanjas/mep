@@ -3,7 +3,9 @@
 //! The core reads environment variables, the clock, the operating system and
 //! the working directory only through [`Env`], so tests inject fixed values.
 
-use std::{collections::HashMap, ffi::OsString, path::PathBuf};
+use std::{collections::HashMap, ffi::OsString};
+
+use typed_path::Utf8TypedPathBuf;
 
 /// The operating system the editor runs on
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +39,16 @@ impl Os
         {
             | Self::Windows => ';',
             | _ => ':'
+        }
+    }
+
+    /// Returns `text` as a path with this operating system's separators and roots
+    pub fn path(self, text: &str) -> Utf8TypedPathBuf
+    {
+        match self
+        {
+            | Self::Windows => Utf8TypedPathBuf::from_windows(text),
+            | _ => Utf8TypedPathBuf::from_unix(text)
         }
     }
 }
@@ -74,7 +86,7 @@ pub trait Env
     fn os(&self) -> Os;
 
     /// Returns the working directory as an absolute path
-    fn cwd(&self) -> PathBuf;
+    fn cwd(&self) -> Utf8TypedPathBuf;
 }
 
 /// Environment with fixed values, for tests
@@ -87,8 +99,8 @@ pub struct FixedEnv
     pub vars: HashMap<String, String>,
     /// Clock value
     pub now:  LocalDateTime,
-    /// Working directory
-    pub cwd:  PathBuf
+    /// Working directory, a path of `os`
+    pub cwd:  String
 }
 
 impl Default for FixedEnv
@@ -100,7 +112,7 @@ impl Default for FixedEnv
             os:   Os::Linux,
             vars: HashMap::new(),
             now:  LocalDateTime { year: 1987, month: 6, day: 27, weekday: 6, hour: 13, minute: 45, second: 55 },
-            cwd:  PathBuf::from("/work")
+            cwd:  "/work".to_string()
         }
     }
 }
@@ -122,9 +134,9 @@ impl Env for FixedEnv
         self.os
     }
 
-    fn cwd(&self) -> PathBuf
+    fn cwd(&self) -> Utf8TypedPathBuf
     {
-        self.cwd.clone()
+        self.os.path(&self.cwd)
     }
 }
 
@@ -142,7 +154,9 @@ mod tests
         assert_eq!(Os::Linux.tag(), "linux");
         assert_eq!(Os::Windows.list_separator(), ';');
         let env = FixedEnv::default();
-        assert_eq!((env.os(), env.var("X"), env.now().year, env.cwd()), (Os::Linux, None, 1987, PathBuf::from("/work")));
+        assert_eq!((env.os(), env.var("X"), env.now().year, env.cwd()), (Os::Linux, None, 1987, Utf8TypedPathBuf::from_unix("/work")));
         assert_eq!(Os::MacOs.list_separator(), ':');
+        assert_eq!(Os::Windows.path("/a").join("b").as_str(), "/a\\b");
+        assert_eq!(Os::MacOs.path("/a").join("b").as_str(), "/a/b");
     }
 }

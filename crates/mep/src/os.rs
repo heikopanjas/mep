@@ -10,11 +10,18 @@ use std::{
 };
 
 use mep_core::{
+    Utf8TypedPathBuf,
     env::{Env, LocalDateTime, Os},
     io::{FileMeta, Fs}
 };
 
 use crate::tz;
+
+/// Returns the operating system path for a path of the core
+fn native(path: &Utf8TypedPathBuf) -> &Path
+{
+    Path::new(path.as_str())
+}
 
 /// The operating system's file system
 #[derive(Debug, Default, Clone, Copy)]
@@ -22,13 +29,14 @@ pub struct OsFs;
 
 impl Fs for OsFs
 {
-    fn read(&self, path: &Path) -> io::Result<Vec<u8>>
+    fn read(&self, path: &Utf8TypedPathBuf) -> io::Result<Vec<u8>>
     {
-        fs::read(path)
+        fs::read(native(path))
     }
 
-    fn write_atomic(&self, path: &Path, data: &[u8]) -> io::Result<()>
+    fn write_atomic(&self, path: &Utf8TypedPathBuf, data: &[u8]) -> io::Result<()>
     {
+        let path = native(path);
         let temp = temp_path(path)?;
         // Keep the old file's permissions, e.g. the executable bit of a script.
         let permissions = fs::metadata(path).map(|meta| meta.permissions()).ok();
@@ -40,14 +48,14 @@ impl Fs for OsFs
             })
     }
 
-    fn rename(&self, from: &Path, to: &Path) -> io::Result<()>
+    fn rename(&self, from: &Utf8TypedPathBuf, to: &Utf8TypedPathBuf) -> io::Result<()>
     {
-        fs::rename(from, to)
+        fs::rename(native(from), native(to))
     }
 
-    fn metadata(&self, path: &Path) -> io::Result<FileMeta>
+    fn metadata(&self, path: &Utf8TypedPathBuf) -> io::Result<FileMeta>
     {
-        match fs::metadata(path)
+        match fs::metadata(native(path))
         {
             | Ok(meta) => Ok(FileMeta { exists: true, readonly: meta.permissions().readonly() }),
             | Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(FileMeta { exists: false, readonly: false }),
@@ -55,14 +63,14 @@ impl Fs for OsFs
         }
     }
 
-    fn read_dir_names(&self, dir: &Path) -> io::Result<Vec<OsString>>
+    fn read_dir_names(&self, dir: &Utf8TypedPathBuf) -> io::Result<Vec<OsString>>
     {
-        fs::read_dir(dir)?.map(|entry| entry.map(|entry| entry.file_name())).collect()
+        fs::read_dir(native(dir))?.map(|entry| entry.map(|entry| entry.file_name())).collect()
     }
 
-    fn create_dir_all(&self, dir: &Path) -> io::Result<()>
+    fn create_dir_all(&self, dir: &Utf8TypedPathBuf) -> io::Result<()>
     {
-        fs::create_dir_all(dir)
+        fs::create_dir_all(native(dir))
     }
 }
 
@@ -99,9 +107,9 @@ impl Env for OsEnv
         OS
     }
 
-    fn cwd(&self) -> PathBuf
+    fn cwd(&self) -> Utf8TypedPathBuf
     {
-        std::env::current_dir().unwrap_or_default()
+        OS.path(&std::env::current_dir().unwrap_or_default().to_string_lossy())
     }
 }
 
@@ -136,6 +144,11 @@ mod tests
 
     use super::*;
 
+    fn typed(path: &Path) -> Utf8TypedPathBuf
+    {
+        OS.path(&path.to_string_lossy())
+    }
+
     fn set_readonly(path: &Path, readonly: bool)
     {
         let mut permissions = fs::metadata(path).unwrap().permissions();
@@ -148,18 +161,18 @@ mod tests
     {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("a.txt");
-        OsFs.write_atomic(&path, b"one\r\n").unwrap();
-        assert_eq!(OsFs.read(&path).unwrap(), b"one\r\n");
-        OsFs.write_atomic(&path, b"two\n").unwrap();
-        assert_eq!(OsFs.read(&path).unwrap(), b"two\n");
-        assert_eq!(OsFs.read_dir_names(dir.path()).unwrap(), vec![OsString::from("a.txt")]);
+        OsFs.write_atomic(&typed(&path), b"one\r\n").unwrap();
+        assert_eq!(OsFs.read(&typed(&path)).unwrap(), b"one\r\n");
+        OsFs.write_atomic(&typed(&path), b"two\n").unwrap();
+        assert_eq!(OsFs.read(&typed(&path)).unwrap(), b"two\n");
+        assert_eq!(OsFs.read_dir_names(&typed(dir.path())).unwrap(), vec![OsString::from("a.txt")]);
     }
 
     #[test]
     fn test_read_missing_file_is_not_found()
     {
         let dir = TempDir::new().unwrap();
-        assert_eq!(OsFs.read(&dir.path().join("none")).unwrap_err().kind(), io::ErrorKind::NotFound);
+        assert_eq!(OsFs.read(&typed(&dir.path().join("none"))).unwrap_err().kind(), io::ErrorKind::NotFound);
     }
 
     #[cfg(unix)]
@@ -171,7 +184,7 @@ mod tests
         let path = dir.path().join("script.sh");
         fs::write(&path, b"old").unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-        OsFs.write_atomic(&path, b"new").unwrap();
+        OsFs.write_atomic(&typed(&path), b"new").unwrap();
         assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o777, 0o755);
     }
 
@@ -179,18 +192,18 @@ mod tests
     fn test_write_atomic_failures_leave_no_temporary_file()
     {
         let dir = TempDir::new().unwrap();
-        assert!(OsFs.write_atomic(&dir.path().join("missing").join("a"), b"x").is_err());
+        assert!(OsFs.write_atomic(&typed(&dir.path().join("missing").join("a")), b"x").is_err());
         let target = dir.path().join("target");
         fs::create_dir(&target).unwrap();
         fs::write(target.join("keep"), b"").unwrap();
-        assert!(OsFs.write_atomic(&target, b"x").is_err());
-        assert_eq!(OsFs.read_dir_names(dir.path()).unwrap(), vec![OsString::from("target")]);
+        assert!(OsFs.write_atomic(&typed(&target), b"x").is_err());
+        assert_eq!(OsFs.read_dir_names(&typed(dir.path())).unwrap(), vec![OsString::from("target")]);
     }
 
     #[test]
     fn test_write_atomic_rejects_path_without_file_name()
     {
-        assert_eq!(OsFs.write_atomic(Path::new("/"), b"x").unwrap_err().kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(OsFs.write_atomic(&typed(Path::new("/")), b"x").unwrap_err().kind(), io::ErrorKind::InvalidInput);
     }
 
     #[test]
@@ -200,9 +213,9 @@ mod tests
         let (from, to) = (dir.path().join("a"), dir.path().join("b"));
         fs::write(&from, b"new").unwrap();
         fs::write(&to, b"old").unwrap();
-        OsFs.rename(&from, &to).unwrap();
+        OsFs.rename(&typed(&from), &typed(&to)).unwrap();
         assert_eq!(fs::read(&to).unwrap(), b"new");
-        assert!(OsFs.rename(&from, &to).is_err());
+        assert!(OsFs.rename(&typed(&from), &typed(&to)).is_err());
     }
 
     #[test]
@@ -210,18 +223,18 @@ mod tests
     {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("r.txt");
-        assert_eq!(OsFs.metadata(&path).unwrap(), FileMeta { exists: false, readonly: false });
+        assert_eq!(OsFs.metadata(&typed(&path)).unwrap(), FileMeta { exists: false, readonly: false });
         fs::write(&path, b"").unwrap();
-        assert_eq!(OsFs.metadata(&path).unwrap(), FileMeta { exists: true, readonly: false });
+        assert_eq!(OsFs.metadata(&typed(&path)).unwrap(), FileMeta { exists: true, readonly: false });
         set_readonly(&path, true);
-        assert!(OsFs.metadata(&path).unwrap().readonly);
+        assert!(OsFs.metadata(&typed(&path)).unwrap().readonly);
         set_readonly(&path, false);
     }
 
     #[test]
     fn test_metadata_reports_other_errors()
     {
-        assert_eq!(OsFs.metadata(Path::new("bad\0name")).unwrap_err().kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(OsFs.metadata(&typed(Path::new("bad\0name"))).unwrap_err().kind(), io::ErrorKind::InvalidInput);
     }
 
     #[test]
@@ -264,7 +277,7 @@ mod tests
     fn test_read_dir_missing_directory_fails()
     {
         let dir = TempDir::new().unwrap();
-        assert!(OsFs.read_dir_names(&dir.path().join("none")).is_err());
+        assert!(OsFs.read_dir_names(&typed(&dir.path().join("none"))).is_err());
     }
 
     #[test]
@@ -272,7 +285,7 @@ mod tests
     {
         let dir = TempDir::new().unwrap();
         let nested = dir.path().join("a").join("b");
-        OsFs.create_dir_all(&nested).unwrap();
+        OsFs.create_dir_all(&typed(&nested)).unwrap();
         assert!(nested.is_dir());
     }
 }

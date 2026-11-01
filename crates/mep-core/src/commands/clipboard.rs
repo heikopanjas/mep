@@ -83,7 +83,7 @@ pub(crate) fn paste(ed: &mut Editor, arg: Arg) -> Step
             {
                 | Some(path) =>
                 {
-                    let id = ed.request(RequestKind::Load(path.to_path_buf()));
+                    let id = ed.request(RequestKind::Load(path.clone()));
                     Step::Wait(Pending::Request { id, then: Then::InsertFile { pos } })
                 }
                 | None => ed.fail(&format!("{text}: cannot insert a pseudo-file"))

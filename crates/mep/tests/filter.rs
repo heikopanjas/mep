@@ -18,7 +18,7 @@ use std::{
 
 use mep::{
     host::{Inbox, TerminalHost},
-    os::OsFs,
+    os::{OsEnv, OsFs},
     process::OsRunner
 };
 use mep_core::{
@@ -58,7 +58,8 @@ fn build(dir: &Path, name: &str, sources: &[PathBuf])
 /// Runs the editor on `a.txt` in `dir` with startup commands and serves its requests as the worker would
 fn edit(dir: &Path, execute: &[&str]) -> Editor
 {
-    let env = FixedEnv { cwd: dir.to_path_buf(), ..FixedEnv::default() };
+    // The real directory needs the host's path style.
+    let env = FixedEnv { os: OsEnv.os(), cwd: dir.to_string_lossy().into_owned(), ..FixedEnv::default() };
     let (_events, incoming) = mpsc::channel();
     let quiet: Box<dyn Fn() -> Box<dyn std::any::Any>> = Box::new(|| Box::new(()));
     let host = TerminalHost {
@@ -70,7 +71,7 @@ fn edit(dir: &Path, execute: &[&str]) -> Editor
         out: SharedOut::new(Box::new(std::io::sink())),
         os: env.os(),
         interactive: String::new(),
-        cwd: dir.to_path_buf(),
+        cwd: env.cwd(),
         fs: Arc::new(OsFs),
         clipboard: Arc::new(Mutex::new(Box::new(MemClipboard::default()))),
         runner: Arc::new(OsRunner(env.os())),
@@ -102,7 +103,7 @@ fn test_filter_sorts_lines_through_sort()
     // `load:filter` finds filter.so, filter.dylib or filter.dll (ORACLE EXT-1).
     let editor = edit(dir.path(), &[r#"arg "load:filter" assign"#, r#"arg "filtcmd:sort <" assign"#, "down arg down down filter"]);
     assert!(editor.result(), "{:?}", editor.message());
-    let text = editor.buffer(&FileName::Disk(dir.path().join("a.txt"))).unwrap();
+    let text = editor.buffer(&FileName::Disk(OsEnv.os().path(&dir.path().to_string_lossy()).join("a.txt"))).unwrap();
     assert_eq!(String::from_utf8(text).unwrap(), "head\napple\nfig\npear\ntail\n");
     assert!(dir.path().join("filter1.tmp").exists() == false);
     assert!(dir.path().join("filter2.tmp").exists() == false);
