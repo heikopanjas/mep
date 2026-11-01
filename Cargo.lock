@@ -510,7 +510,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "mep"
-version = "0.15.1"
+version = "0.15.2"
 dependencies = [
  "clap",
  "mep-clip",
@@ -525,7 +525,7 @@ dependencies = [
 
 [[package]]
 name = "mep-clip"
-version = "0.15.1"
+version = "0.15.2"
 dependencies = [
  "clipboard-rs",
  "mep-core",
@@ -533,7 +533,7 @@ dependencies = [
 
 [[package]]
 name = "mep-core"
-version = "0.15.1"
+version = "0.15.2"
 dependencies = [
  "anyhow",
  "proptest",
@@ -544,7 +544,7 @@ dependencies = [
 
 [[package]]
 name = "mep-ext"
-version = "0.15.1"
+version = "0.15.2"
 dependencies = [
  "libloading",
  "mep-core",
@@ -552,7 +552,7 @@ dependencies = [
 
 [[package]]
 name = "mep-term"
-version = "0.15.1"
+version = "0.15.2"
 dependencies = [
  "crossterm",
  "mep-core",

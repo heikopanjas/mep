@@ -116,6 +116,7 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - **Dependencies**: only the crates listed in `IMPLEMENTATION_PLAN.md` §4.3, which include `anyhow`, `clap`, `regex`, `typed-path` (mep-core, held at 0.12.3), `libloading` (mep-ext), `signal-hook` (mep, Unix) and `windows-sys` (mep, Windows). Any other crate, runtime or dev, needs a one-line justification and the owner's OK. FNV-1a 64 is implemented in-house. A crate is added to a `Cargo.toml` only when code first uses it
 - **Large documents** (`IMPLEMENTATION_PLAN.md` §3.5): the editor must never slow down or freeze on large files. The core stays a deterministic single-threaded state machine; input, rendering, file I/O, clipboard and jobs run on `std::thread` workers with `mpsc` channels (no async runtime). Commands that need I/O suspend and resume on a completion event. The cost of an edit depends on the size of the edit, not the size of the file
 - **Local time**: `curdate`/`curtime` read `/etc/localtime` or `TZ` with the TZif parser in `crates/mep/src/tz.rs` (no time crate); Windows falls back to UTC until a solution is approved
+- **AltGr**: Windows reports AltGr as Ctrl+Alt, so `mep-term` treats a character key with Ctrl and Alt as typed text unless the character is an ASCII letter or digit; Ctrl+Alt with punctuation cannot be bound
 - **Byte-exact round trip**: never normalize unedited lines (terminators, tabs, trailing spaces, invalid UTF-8)
 - **Small commits**: each one builds and passes the check script
 - **Script names**: shell scripts for Linux and macOS end in `.sh`, PowerShell scripts for Windows in `.ps1`
@@ -193,7 +194,7 @@ Also postponed by the owner on 2026-11-01; M3 is not accepted until these pass:
 
 M4 checks still open:
 
-- `shell` by hand on Linux; `compile` by hand on Linux and on Windows. `shell` passed by hand on Windows (`cmd /C`: a command, a failing command, Ctrl+C during `ping -t` with `SetConsoleCtrlHandler`); the extension acceptance test (`crates/mep/tests/filter.rs`) passed in CI on Linux and on Windows with clang, macOS passed
+- `shell` and `compile` by hand on Linux. Windows passed: `compile` with `extmake:c clang -fsyntax-only %s` (Alt+A Shift+F3 shows the errors), and `shell` (`cmd /C`: a command, a failing command, Ctrl+C during `ping -t` with `SetConsoleCtrlHandler`); the extension acceptance test (`crates/mep/tests/filter.rs`) passed in CI on Linux and on Windows with clang, macOS passed
 - Shift+F3 (`compile`) on terminals without the kitty keyboard protocol: crossterm reads the xterm sequence `CSI 1;2R` as a cursor position report and drops it. Open on Linux and macOS only: on Windows crossterm reads console key events, and Shift+F3 reaches `compile` (`No more compile messages` without a compile)
 
 ## Recent Updates & Decisions

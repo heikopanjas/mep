@@ -6,6 +6,9 @@
 //! Without the kitty keyboard protocol, terminals send some keys alike:
 //! Ctrl+M arrives as Enter, Ctrl+[ as Esc, Ctrl+H as Backspace, Ctrl+I as Tab,
 //! and Alt+key as an Esc prefix that crossterm turns back into Alt.
+//!
+//! Windows reports AltGr as Ctrl+Alt, so a character other than an ASCII
+//! letter or digit with both modifiers is typed text, not a key combination.
 
 #![cfg_attr(test, feature(coverage_attribute))]
 #![allow(clippy::bool_comparison)]
@@ -37,8 +40,8 @@ pub fn convert_key(event: KeyEvent) -> Option<Key>
 {
     require!(event.kind != KeyEventKind::Release, None);
     let mods = event.modifiers;
-    let ctrl = mods.contains(KeyModifiers::CONTROL);
-    let alt = mods.contains(KeyModifiers::ALT);
+    let mut ctrl = mods.contains(KeyModifiers::CONTROL);
+    let mut alt = mods.contains(KeyModifiers::ALT);
     // Command on macOS, the Windows key elsewhere; only the kitty keyboard protocol reports it.
     let cmd = mods.contains(KeyModifiers::SUPER);
     let mut shift = mods.contains(KeyModifiers::SHIFT);
@@ -52,6 +55,12 @@ pub fn convert_key(event: KeyEvent) -> Option<Key>
         {
             // The character already includes Shift; Ctrl, Alt and Cmd combine with the lowercase letter.
             shift = false;
+            // Windows reports AltGr as Ctrl+Alt; a character other than a letter or digit is what AltGr typed.
+            if ctrl && alt && ch.is_ascii_alphanumeric() == false
+            {
+                ctrl = false;
+                alt = false;
+            }
             KeyCode::Char(
                 if ctrl || alt || cmd
                 {
@@ -367,6 +376,17 @@ mod tests
         assert_eq!(name(key(event::KeyCode::Char('-'), KeyModifiers::NONE)).unwrap(), "-");
         assert_eq!(name(key(event::KeyCode::Char('C'), KeyModifiers::SUPER | KeyModifiers::SHIFT)).unwrap(), "cmd+c");
         assert_eq!(name(key(event::KeyCode::F(3), KeyModifiers::SUPER)).unwrap(), "cmd+f3");
+    }
+
+    #[test]
+    fn test_altgr_characters_are_typed()
+    {
+        let altgr = KeyModifiers::CONTROL | KeyModifiers::ALT;
+        assert_eq!(name(key(event::KeyCode::Char('{'), altgr)).unwrap(), "{");
+        assert_eq!(name(key(event::KeyCode::Char('|'), altgr | KeyModifiers::SHIFT)).unwrap(), "|");
+        assert_eq!(name(key(event::KeyCode::Char('€'), altgr)).unwrap(), "€");
+        assert_eq!(name(key(event::KeyCode::Char('A'), altgr | KeyModifiers::SHIFT)).unwrap(), "ctrl+alt+a");
+        assert_eq!(name(key(event::KeyCode::Char('7'), altgr)).unwrap(), "ctrl+alt+7");
     }
 
     #[test]

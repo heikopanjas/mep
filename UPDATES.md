@@ -4,6 +4,19 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.15.2, compile verified on windows, 18:30)
+
+- the owner ran compile by hand on windows with extmake:c clang -fsyntax-only %s from a TOOLS.INI in %APPDATA%\mep; arg compile shows the compile errors in the editor
+- the pending item for compile by hand on windows is done; shell and compile by hand stay open on linux
+- no version bump: documentation only
+
+### 2026-11-01 (v0.15.2, altgr characters on windows, 18:00)
+
+- a character key with both ctrl and alt is typed text when the character is not an ascii letter or digit; on windows altgr+7 on a german keyboard now inserts { instead of being the unbound key ctrl+alt+{
+- rationale: windows reports altgr as ctrl+alt and crossterm passes the modifiers through, so braces, brackets, backslash, pipe, at sign and euro could not be typed on such layouts
+- trade-off: ctrl+alt with punctuation or non-ascii characters can no longer be bound; no default binding uses them, ctrl+alt with letters and digits still can
+- version bump: 0.15.1 to 0.15.2 (PATCH - bug fix)
+
 ### 2026-11-01 (v0.15.1, shell verified on windows, 17:00)
 
 - the owner ran shell by hand on windows: arg dir shell, a failing dir command, and ctrl+c during ping -t all behaved as shell.md requires
