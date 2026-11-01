@@ -4,6 +4,11 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.15.1, ci green on all platforms)
+
+- the check scripts pass in ci on ubuntu, macos and windows, coverage gate included, so the pending item for check.sh on linux and check.ps1 on windows is done
+- no version bump: documentation only
+
 ### 2026-11-01 (v0.15.1, process tests on every os)
 
 - the runner test in process.rs and the shell test in host.rs run on every os with the host's shell instead of only on unix; cmd gets its own command lines, crlf output and hostname as the interactive program
