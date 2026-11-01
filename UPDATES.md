@@ -4,6 +4,12 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.15.1, examples folder)
+
+- new examples folder with the owner's TOOLS.INI; it loads without errors and its switches and begfile and endfile bindings take effect
+- rationale: a sample configuration for users, and a check that the project additions work together in a real file
+- no version bump: no code change
+
 ### 2026-11-01 (v0.15.1, ci green on all platforms)
 
 - the check scripts pass in ci on ubuntu, macos and windows, coverage gate included, so the pending item for check.sh on linux and check.ps1 on windows is done

@@ -153,6 +153,7 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - ORACLE items: `docs/oracle.md` with manual text, chosen behavior and a key sequence to confirm against a real MEP
 - Sources: `docs/sources/` follows the conventions in `docs/sources/README.md`
 - README updates: when user-visible behavior, build steps or CLI options change
+- Examples: `examples/` holds sample configurations; `examples/TOOLS.INI` is the owner's working configuration and uses the project additions `begfile`, `endfile` and `cursorsize`. Keep it loading without errors when switches or functions change
 - Changelog: maintained in `UPDATES.md` (see the `recent-updates` skill)
 
 <!-- {languages} -->
