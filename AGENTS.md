@@ -31,12 +31,12 @@ Non-goals for now: syntax highlighting, GUI, mouse support, Z editor behavior, t
 - **Framework:** none; terminal I/O through `crossterm`, system clipboard through `clipboard-rs` (with its `wayland` feature on Linux; `wl-clipboard-rs` is held at 0.9.4 because 0.9.5 is younger than two weeks), OSC 52 in SSH sessions and when no desktop clipboard exists
 - **Version Control:** Git; public remote `origin` at `git@github.com:heikopanjas/mep.git`, `main` tracks `origin/main`
 - **Package Manager:** Cargo workspace (`crates/mep-core`, `crates/mep-term`, `crates/mep-clip`, `crates/mep-ext`, `crates/mep`); `Cargo.lock` is committed
-- **C extensions:** `crates/mep-ext/c/ext.h` and `exthdr.c` are our replacement for the 1988 `EXT.H`/`EXTHDR.OBJ`; `crates/mep/tests/filter.rs` compiles the MSJ `filter.c` with the platform C compiler (`$CC`, else `cc`, `clang` on Windows), so the check needs a C compiler
+- **C extensions:** `crates/mep-ext/c/ext.h` and `exthdr.c` are our replacement for the 1988 `EXT.H`/`EXTHDR.OBJ`; `crates/mep/tests/filter.rs` compiles the MSJ `filter.c` with the platform C compiler (`$CC`, else `cc`, `clang` on Windows), so the check needs a C compiler. The test passes gcc-style flags (`-shared`, `-o`), so `$CC` must be a gcc-style driver: on Windows a `CC=cl.exe` left by a Visual Studio environment fails to link, run the check with `$env:CC = 'clang'`
 - **Version manifest:** `[workspace.package] version` in the root `Cargo.toml`; all crates inherit it
 - **Coverage tool:** `cargo-llvm-cov`
 - **Check script:** `scripts/check.sh` (Linux, macOS; needs `jq`) and `scripts/check.ps1` (Windows), optional `--report` for an HTML coverage report in `target/llvm-cov/html`
 - **CI:** `.github/workflows/ci.yml` runs the check script on Ubuntu, macOS and Windows
-- **Line endings:** `.gitattributes` (`* text=auto eol=lf`) checks text files out with LF on every platform, as `.editorconfig` and rustfmt's `newline_style = "Unix"` require
+- **Line endings:** `.gitattributes` (`* text=auto eol=lf`) checks text files out with LF on every platform, as `.editorconfig` and rustfmt's `newline_style = "Unix"` require. A working tree checked out before that rule keeps CRLF (`git ls-files --eol` shows `w/crlf`) and fails `cargo fmt --check`; on a clean tree `git rm --cached -r -q . ; git reset --hard` checks it out again with LF
 - **License:** MIT (`LICENSE`, `license = "MIT"` in the workspace manifest)
 
 ## Session Protocol

@@ -1,1 +1,3 @@
 /target
+# MSVC cl writes object files to the working directory; tests run from the crate directory
+*.obj

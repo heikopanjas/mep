@@ -4,6 +4,19 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.15.1, ignore object files, 16:15)
+
+- .gitignore ignores *.obj files
+- rationale: a filter test run with CC=cl.exe leaves object files in crates/mep, the test working directory, and they showed up as untracked files
+- no version bump: repository housekeeping only
+
+### 2026-11-01 (v0.15.1, local windows check notes, 16:00)
+
+- agents.md notes that the filter test needs a gcc-style c compiler in $CC; a CC=cl.exe from a visual studio environment fails to link, CC=clang passes
+- agents.md notes how to refresh a working tree that still has crlf files from before the eol=lf rule
+- rationale: the first local run of check.ps1 on windows failed on both points although the code and ci were green
+- no version bump: documentation only
+
 ### 2026-11-01 (v0.15.1, examples folder)
 
 - new examples folder with the owner's TOOLS.INI; it loads without errors and its switches and begfile and endfile bindings take effect
