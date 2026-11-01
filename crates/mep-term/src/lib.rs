@@ -39,6 +39,8 @@ pub fn convert_key(event: KeyEvent) -> Option<Key>
     let mods = event.modifiers;
     let ctrl = mods.contains(KeyModifiers::CONTROL);
     let alt = mods.contains(KeyModifiers::ALT);
+    // Command on macOS, the Windows key elsewhere; only the kitty keyboard protocol reports it.
+    let cmd = mods.contains(KeyModifiers::SUPER);
     let mut shift = mods.contains(KeyModifiers::SHIFT);
     let keypad = event.state.contains(KeyEventState::KEYPAD);
     let code = match event.code
@@ -48,10 +50,10 @@ pub fn convert_key(event: KeyEvent) -> Option<Key>
         | event::KeyCode::Char(ch) if keypad == true && ch.is_ascii_digit() => KeyCode::NumDigit(ch as u8 - b'0'),
         | event::KeyCode::Char(ch) =>
         {
-            // The character already includes Shift; Ctrl and Alt combine with the lowercase letter.
+            // The character already includes Shift; Ctrl, Alt and Cmd combine with the lowercase letter.
             shift = false;
             KeyCode::Char(
-                if ctrl || alt
+                if ctrl || alt || cmd
                 {
                     ch.to_ascii_lowercase()
                 }
@@ -83,7 +85,7 @@ pub fn convert_key(event: KeyEvent) -> Option<Key>
         | event::KeyCode::Enter => KeyCode::Enter,
         | _ => return None
     };
-    Some(Key { code, ctrl, alt, shift })
+    Some(Key { code, ctrl, alt, shift, cmd })
 }
 
 /// Converts a crossterm event; `None` for events MEP ignores (mouse, focus, paste)
@@ -362,6 +364,8 @@ mod tests
         assert_eq!(name(key(event::KeyCode::Char('='), KeyModifiers::ALT)).unwrap(), "alt+=");
         assert_eq!(name(key(event::KeyCode::Char('+'), KeyModifiers::NONE)).unwrap(), "+");
         assert_eq!(name(key(event::KeyCode::Char('-'), KeyModifiers::NONE)).unwrap(), "-");
+        assert_eq!(name(key(event::KeyCode::Char('C'), KeyModifiers::SUPER | KeyModifiers::SHIFT)).unwrap(), "cmd+c");
+        assert_eq!(name(key(event::KeyCode::F(3), KeyModifiers::SUPER)).unwrap(), "cmd+f3");
     }
 
     #[test]

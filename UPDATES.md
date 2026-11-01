@@ -4,6 +4,19 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.13.0, command key)
+
+- new key modifier cmd+ for the macos command key (super elsewhere), reported by terminals with the kitty keyboard protocol; usable in tools.ini and assign, for example copy:cmd+c (oracle key-1)
+- fixes keys with the super modifier that typed their plain character before
+- an unassigned cmd+ key runs unassigned and never types its character
+- rationale: the owner wants command key shortcuts on macos; ghostty reports command as super for combinations it does not bind itself
+- version bump: 0.12.1 to 0.13.0 (MINOR - new key names)
+
+### 2026-11-01 (v0.12.1, option key on macos)
+
+- alt keys on macos need the terminal to send option as alt; ghostty works with macos-option-as-alt = left, as confirmed by the owner
+- rationale: macos terminals compose characters such as å with option by default; mep receives the character and cannot tell it from typed text, so the setting belongs to the terminal and no code changes
+
 ### 2026-11-01 (v0.12.1, performance tests)
 
 - added the plan's performance tests as ignored perf_ tests: loading the 2 million line, 100 MB reference document takes 69 ms (limit 1 s); insert, delete, moves, page down, undo, status and a frame at the start, middle and end stay under 4 ms (limit 16 ms); the slowest search slice takes 9 ms

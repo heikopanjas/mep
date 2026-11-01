@@ -96,3 +96,4 @@ The command specs in `docs/spec/commands/` give the full manual text and reasoni
 | EXT-2 | An extension function with the name of a built-in one | The built-in function stays; another extension's function of that name is replaced | An extension exporting `psearch` |
 | EXT-3 | `Display` "Cause display to be redrawn" (MSJ Fig. 7) | Repaints the whole screen after the command | An extension calling `Display` in a loop |
 | EXT-4 | `ReadCmd` returns an internal command pointer in the original | Returns the name of the function assigned to the next key | An extension printing `ReadCmd()` |
+| KEY-1 | No Command key in 1988 (p. 46 key names) | Project addition: `cmd+` names the Command (Super) key reported through the kitty keyboard protocol; no default uses it; an unassigned `cmd+` key does not type | `copy:cmd+c` in TOOLS.INI, Cmd+C in Ghostty with `keybind = cmd+c=unbind` |

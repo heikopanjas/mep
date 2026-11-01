@@ -1410,8 +1410,9 @@ pub(crate) fn key_char(key: Key) -> Option<char>
 {
     match key.code
     {
-        | KeyCode::Char(ch) if key.alt == false && key.ctrl == false => Some(ch),
-        | KeyCode::Char(ch) if key.alt == false && ('@'..='_').contains(&ch.to_ascii_uppercase()) => Some(char::from(ch.to_ascii_uppercase() as u8 & 0x1f)),
+        | KeyCode::Char(ch) if key.alt == false && key.ctrl == false && key.cmd == false => Some(ch),
+        | KeyCode::Char(ch) if key.alt == false && key.cmd == false && ('@'..='_').contains(&ch.to_ascii_uppercase()) =>
+            Some(char::from(ch.to_ascii_uppercase() as u8 & 0x1f)),
         | KeyCode::Esc => Some('\u{1b}'),
         | KeyCode::Tab => Some('\t'),
         | KeyCode::Bksp => Some('\u{8}'),
@@ -1510,6 +1511,8 @@ mod tests
         assert_eq!(key("ctrl+["), Some('\u{1b}'));
         assert_eq!(key("ctrl+1"), None);
         assert_eq!(key("alt+x"), None);
+        assert_eq!(key("cmd+x"), None);
+        assert_eq!(key("ctrl+cmd+l"), None);
         assert_eq!(key("esc"), Some('\u{1b}'));
         assert_eq!(key("tab"), Some('\t'));
         assert_eq!(key("bksp"), Some('\u{8}'));

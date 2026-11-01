@@ -19,7 +19,8 @@ Derived from the syntax lines on p. 93:
 Every form feeds one or more lines to the same parser that reads TOOLS.INI statements (plan §6.12):
 - `function:key` assigns a function or macro to a key (M guide p. 46); `unassigned:key` removes an assignment (p. 47); `graphic:key` makes a key insert its character (p. 48). Names are case-insensitive (p. 3).
 - `name:=item item …` defines or replaces a macro (p. 49; plan §6.14). Limit 1024 macros.
-- `switch:value`, `switch:` and `noswitch:` set switches (p. 57; switches.md). `load:` is accepted and stored (M4).
+- `switch:value`, `switch:` and `noswitch:` set switches (p. 57; switches.md). `load:` loads an extension (extensions.md).
+- Key names are those of p. 46 (`ctrl+`, `alt+`, `shift+` before a key, in any order). Project addition: `cmd+` for the Command key on macOS (the Windows or Super key elsewhere), e.g. `copy:cmd+c`. Terminals report it only with the kitty keyboard protocol (Ghostty, kitty, WezTerm), and only for combinations the terminal does not use itself. A `cmd+` key without an assignment runs `unassigned`; it never types its character. ORACLE KEY-1.
 Assignments last for the session only (p. 46). Assigning a key does not remove other keys bound to the same function (p. 46).
 
 ### nullarg (`Arg Assign`)

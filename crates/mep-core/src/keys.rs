@@ -61,7 +61,9 @@ pub struct Key
     /// Alt held
     pub alt:   bool,
     /// Shift held
-    pub shift: bool
+    pub shift: bool,
+    /// Command (macOS) or Super held; terminals report it only with the kitty keyboard protocol
+    pub cmd:   bool
 }
 
 /// Names of the keys without modifiers, besides characters and F-keys
@@ -85,27 +87,28 @@ const NAMED: &[(&str, KeyCode)] = &[
     ("num-", KeyCode::NumMinus)
 ];
 
-/// Modifier prefixes in the order the printer writes them
-const MODIFIERS: [&str; 3] = ["ctrl+", "alt+", "shift+"];
+/// Modifier prefixes in the order the printer writes them; `cmd+` is a project addition (ORACLE KEY-1)
+const MODIFIERS: [&str; 4] = ["ctrl+", "alt+", "shift+", "cmd+"];
 
 impl Key
 {
     /// Creates a key without modifiers
     pub fn plain(code: KeyCode) -> Self
     {
-        Self { code, ctrl: false, alt: false, shift: false }
+        Self { code, ctrl: false, alt: false, shift: false, cmd: false }
     }
 
-    /// Parses a key name such as `alt+a`, `ctrl+pgdn`, `shift+f2` or `num+`; case does not matter
+    /// Parses a key name such as `alt+a`, `ctrl+pgdn`, `shift+f2`, `cmd+c` or `num+`; case does not matter
     ///
     /// # Errors
     ///
     /// Returns an error naming the text if it is not a key name.
+    // ORACLE: KEY-1
     pub fn parse(name: &str) -> Result<Self>
     {
         let lower = name.to_lowercase();
         let mut rest = lower.as_str();
-        let mut held = [false; 3];
+        let mut held = [false; 4];
         // A modifier needs a key after it, so "alt++" is Alt with the + key.
         while let Some(index) = MODIFIERS.iter().position(|prefix| rest.len() > prefix.len() && rest.starts_with(prefix))
         {
@@ -113,8 +116,8 @@ impl Key
             rest = &rest[MODIFIERS[index].len()..];
         }
         let code = code_of(rest).ok_or_else(|| anyhow!("unknown key name '{name}'"))?;
-        let [ctrl, alt, shift] = held;
-        Ok(Self { code, ctrl, alt, shift })
+        let [ctrl, alt, shift, cmd] = held;
+        Ok(Self { code, ctrl, alt, shift, cmd })
     }
 }
 
@@ -123,7 +126,8 @@ impl fmt::Display for Key
     /// Writes the canonical key name, e.g. `ctrl+alt+x`
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
     {
-        let prefixes: String = [self.ctrl, self.alt, self.shift].into_iter().zip(MODIFIERS).filter(|(held, _)| *held == true).map(|(_, prefix)| prefix).collect();
+        let prefixes: String =
+            [self.ctrl, self.alt, self.shift, self.cmd].into_iter().zip(MODIFIERS).filter(|(held, _)| *held == true).map(|(_, prefix)| prefix).collect();
         let name = match self.code
         {
             | KeyCode::F(number) => format!("f{number}"),
@@ -242,7 +246,7 @@ impl Keymap
         self.map.get(&key).map_or_else(
             || match key.code
             {
-                | KeyCode::Char(ch) if key.ctrl == false && key.alt == false && ch.is_control() == false => "graphic",
+                | KeyCode::Char(ch) if key.ctrl == false && key.alt == false && key.cmd == false && ch.is_control() == false => "graphic",
                 | _ => "unassigned"
             },
             String::as_str
@@ -270,7 +274,7 @@ mod tests
 
     fn key(code: KeyCode, ctrl: bool, alt: bool, shift: bool) -> Key
     {
-        Key { code, ctrl, alt, shift }
+        Key { code, ctrl, alt, shift, cmd: false }
     }
 
     #[test]
@@ -297,6 +301,10 @@ mod tests
         assert_eq!(Key::parse("alt+ctrl+x").unwrap(), key(KeyCode::Char('x'), true, true, false));
         assert_eq!(Key::parse("space").unwrap(), Key::plain(KeyCode::Char(' ')));
         assert_eq!(Key::parse("7").unwrap(), Key::plain(KeyCode::Char('7')));
+        let cmd = Key::parse("Cmd+Shift+C").unwrap();
+        assert_eq!(cmd, Key { cmd: true, ..key(KeyCode::Char('c'), false, false, true) });
+        assert_eq!(cmd.to_string(), "shift+cmd+c");
+        assert!(Key::parse("cmd+").is_err());
     }
 
     #[test]
@@ -332,6 +340,7 @@ mod tests
         assert_eq!(keymap.lookup(Key::parse("ctrl+q").unwrap()), "unassigned");
         assert_eq!(keymap.lookup(Key::plain(KeyCode::Char('\u{7}'))), "unassigned");
         assert_eq!(keymap.lookup(Key::parse("f12").unwrap()), "unassigned");
+        assert_eq!(keymap.lookup(Key::parse("cmd+x").unwrap()), "unassigned");
     }
 
     #[test]

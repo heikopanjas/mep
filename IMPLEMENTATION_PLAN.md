@@ -325,7 +325,7 @@ Later milestones: `mark`, `replace`, `qreplace` (M2); `window`, `information` (M
 
 ### 6.8 Default key bindings (MEP)
 
-The complete default keymap is the **Default** column of Table A.2 (M guide pp. 90–92). It is reproduced here; the manual wins if they ever differ. The Quick/WordStar, BRIEF and EPSILON columns are not implemented in the first release.
+The complete default keymap is the **Default** column of Table A.2 (M guide pp. 90–92). No default uses the `cmd+` modifier, a project addition for the macOS Command key in kitty-protocol terminals (assign.md, ORACLE KEY-1). It is reproduced here; the manual wins if they ever differ. The Quick/WordStar, BRIEF and EPSILON columns are not implemented in the first release.
 
 | Function | Keys | Function | Keys |
 |---|---|---|---|

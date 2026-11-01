@@ -215,3 +215,21 @@ cd
 -- keys
 arg down initialize
 -- expect message Invalid argument
+
+== name: cmd keys can be assigned and type nothing otherwise
+-- tools.ini
+[mep]
+copy:cmd+c
+paste:cmd+v
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+arg right right cmd+c endline cmd+v
+-- expect file a.txt
+abcab
+-- keys
+cmd+x
+-- expect message cmd+x is not assigned to any editor function
+-- expect file a.txt
+abcab
