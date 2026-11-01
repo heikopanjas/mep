@@ -4,6 +4,12 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.15.0, no fail fast in the check scripts)
+
+- check.sh and check.ps1 run the doc tests and the coverage test run with --no-fail-fast
+- rationale: the first windows run stopped at the first failing test binary, so the mep-core and scenario tests never ran; one run now shows every failure
+- no version bump: no code change
+
 ### 2026-11-01 (v0.15.0, lf line endings on windows)
 
 - new .gitattributes with text=auto eol=lf: text files are checked out with lf on every platform

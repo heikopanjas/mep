@@ -26,9 +26,9 @@ ignore='(mep-term[/\\]src[/\\]sys\.rs|mep-clip[/\\]src[/\\]system\.rs|mep[/\\]sr
 
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --doc --locked
+cargo test --workspace --doc --locked --no-fail-fast
 cargo llvm-cov clean --workspace
-cargo llvm-cov --workspace --branch --locked --no-report
+cargo llvm-cov --workspace --branch --locked --no-report --no-fail-fast
 cargo llvm-cov report --branch --ignore-filename-regex "$ignore" \
     --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
 # cargo-llvm-cov has no branch threshold; read the missed branches from the summary.

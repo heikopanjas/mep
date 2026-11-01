@@ -38,11 +38,11 @@ cargo fmt --all '--' --check
 Assert-Success
 cargo clippy --workspace --all-targets --locked '--' -D warnings
 Assert-Success
-cargo test --workspace --doc --locked
+cargo test --workspace --doc --locked --no-fail-fast
 Assert-Success
 cargo llvm-cov clean --workspace
 Assert-Success
-cargo llvm-cov --workspace --branch --locked --no-report
+cargo llvm-cov --workspace --branch --locked --no-report --no-fail-fast
 Assert-Success
 cargo llvm-cov report --branch --ignore-filename-regex $ignore --fail-under-lines 100 --fail-under-functions 100 --fail-under-regions 100
 Assert-Success
