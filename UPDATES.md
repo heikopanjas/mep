@@ -4,6 +4,13 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.14.0, cursorsize switch)
+
+- new project switch cursorsize: 0 underline, 1 block, for insert and overtype mode; without it the cursor stays a bar in insert mode and a block in overtype mode (oracle cursor-1)
+- the meaning comes from the comment in a sample mep tools.ini from tenox7/ntutils; the owner chose one shape for both modes
+- sample configurations from tenox7/ntutils may be read; the repository holds binaries and sample configs, no source code
+- version bump: 0.13.0 to 0.14.0 (MINOR - new switch)
+
 ### 2026-11-01 (v0.13.0, command key)
 
 - new key modifier cmd+ for the macos command key (super elsewhere), reported by terminals with the kitty keyboard protocol; usable in tools.ini and assign, for example copy:cmd+c (oracle key-1)

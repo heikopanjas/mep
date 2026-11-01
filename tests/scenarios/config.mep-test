@@ -233,3 +233,29 @@ cmd+x
 -- expect message cmd+x is not assigned to any editor function
 -- expect file a.txt
 abcab
+
+== name: the cursor is a bar in insert mode and a block in overtype mode
+-- expect shape block
+-- keys
+insertmode
+-- expect shape bar
+
+== name: cursorsize sets one cursor shape for both modes
+-- tools.ini
+[mep]
+cursorsize:0
+enterinsmode:
+-- expect shape underline
+-- keys
+insertmode
+-- expect shape underline
+-- keys
+arg "cursorsize:1" assign
+-- expect shape block
+-- keys
+insertmode
+-- expect shape block
+-- keys
+arg "cursorsize:2" assign
+-- expect message cursorsize: value must be between 0 and 1
+-- expect shape block

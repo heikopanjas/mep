@@ -9,7 +9,7 @@ NOARG (one syntax line). Not KEEPMETA. Not MODIFIES. `Arg Arg` does not apply.
 ## Behavior
 
 ### noarg
-Toggles insert mode (p. 98). While on, the status line shows `insert` (p. 8, p. 13). The front end shows a bar cursor in insert mode and a block in overtype, where supported (plan §7). The initial state comes from `enterinsmode` (p. 61). Returns true if insert mode is now on, false if now off (Table 6.1 p. 51).
+Toggles insert mode (p. 98). While on, the status line shows `insert` (p. 8, p. 13). The front end shows a bar cursor in insert mode and a block in overtype, where supported (plan §7); `cursorsize` replaces both with one shape (switches.md). The initial state comes from `enterinsmode` (p. 61). Returns true if insert mode is now on, false if now off (Table 6.1 p. 51).
 
 ### meta
 No meta form. Meta is ignored and cleared.

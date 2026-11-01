@@ -103,6 +103,7 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 ### Development Guidelines
 
 - **Clean room**: never use, search for, or read the leaked Windows NT source of MEP or the source of other MEP/Z clones. Behavior comes only from the manuals in `docs/sources/` and from observing a real MEP binary
+- **Sample configurations**: the owner's TOOLS.INI files from https://github.com/tenox7/ntutils (binaries and sample configs, no source code) may be read; a switch they use that the 1988 manual lacks is added only as a project addition with an ORACLE item, after asking the owner
 - **The manual is the spec**: the Microsoft Editor User's Guide (1988) is authoritative for every command and switch. Where `IMPLEMENTATION_PLAN.md` and the manual disagree, stop and ask. Z editor sources are secondary; MEP wins every conflict
 - **Spec, then tests, then code**: before implementing a command, write its behavior per argument kind into `docs/spec/commands/<name>.md`, citing manual pages ("M guide p. 102"), then write tests from that spec, then implement
 - **ORACLE items**: where the manual is ambiguous, implement the manual's reading and mark code and test with `// ORACLE: <id>`; record the item in `docs/oracle.md`. ORACLE tests stay active

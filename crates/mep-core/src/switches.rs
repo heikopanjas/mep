@@ -35,6 +35,8 @@ pub struct Switches
     pub backup:        Backup,
     /// Searches are case-sensitive
     pub case:          bool,
+    /// Cursor shape in both modes: 0 underline, 1 block; not set: bar in insert mode, block in overtype (ORACLE CURSOR-1)
+    pub cursorsize:    Option<usize>,
     /// Status line shows the cursor instead of the window position
     pub displaycursor: bool,
     /// Tab conversion of edited lines on save, 0–2
@@ -104,6 +106,7 @@ impl Default for Switches
             autosave:      true,
             backup:        Backup::None,
             case:          false,
+            cursorsize:    None,
             displaycursor: false,
             entab:         1,
             enterinsmode:  false,
@@ -146,8 +149,8 @@ enum Kind
     Number(fn(&mut Switches) -> &mut usize, usize, usize),
     /// Code of a printable one-cell character; with `true`, 0 is allowed and means off
     Char(fn(&mut Switches) -> &mut usize, bool),
-    /// Optional decimal number of at least 1
-    Size(fn(&mut Switches) -> &mut Option<usize>),
+    /// Optional decimal number in a range
+    Optional(fn(&mut Switches) -> &mut Option<usize>, usize, usize),
     /// Two hex digits
     Color(fn(&mut Switches) -> &mut u8),
     /// Any text
@@ -174,13 +177,14 @@ const TABLE: &[(&str, Kind)] = &[
     ("autosave", Kind::Flag(|s| &mut s.autosave)),
     ("backup", Kind::Backup),
     ("case", Kind::Flag(|s| &mut s.case)),
+    ("cursorsize", Kind::Optional(|s| &mut s.cursorsize, 0, 1)),
     ("displaycursor", Kind::Flag(|s| &mut s.displaycursor)),
     ("entab", Kind::Number(|s| &mut s.entab, 0, 2)),
     ("enterinsmode", Kind::Flag(|s| &mut s.enterinsmode)),
     ("errcolor", Kind::Color(|s| &mut s.errcolor)),
     ("extmake", Kind::Extmake),
     ("fgcolor", Kind::Color(|s| &mut s.fgcolor)),
-    ("height", Kind::Size(|s| &mut s.height)),
+    ("height", Kind::Optional(|s| &mut s.height, 1, MAX)),
     ("hgcolor", Kind::Color(|s| &mut s.hgcolor)),
     ("hike", Kind::Number(|s| &mut s.hike, 0, MAX)),
     ("hscroll", Kind::Number(|s| &mut s.hscroll, 1, MAX)),
@@ -203,7 +207,7 @@ const TABLE: &[(&str, Kind)] = &[
     ("undocount", Kind::Number(|s| &mut s.undocount, 0, MAX)),
     ("vmbuf", Kind::IgnoredNumber),
     ("vscroll", Kind::Number(|s| &mut s.vscroll, 1, MAX)),
-    ("width", Kind::Size(|s| &mut s.width)),
+    ("width", Kind::Optional(|s| &mut s.width, 1, MAX)),
     ("wordwrap", Kind::Flag(|s| &mut s.wordwrap))
 ];
 
@@ -236,7 +240,7 @@ impl Switches
             | Kind::Number(field, min, max) => *field(self) = number(value, min, max).map_err(fail)?,
             | Kind::Char(field, zero) => *field(self) = character(value, zero).map_err(fail)?,
             | Kind::IgnoredNumber => drop(number(value, 0, MAX).map_err(fail)?),
-            | Kind::Size(field) => *field(self) = Some(number(value, 1, MAX).map_err(fail)?),
+            | Kind::Optional(field, min, max) => *field(self) = Some(number(value, min, max).map_err(fail)?),
             | Kind::Color(field) =>
             {
                 let color = (1..=2).contains(&value.len()).then(|| u8::from_str_radix(value, 16).ok()).flatten();
@@ -326,6 +330,7 @@ mod tests
         ("autosave", "", "x"),
         ("backup", "bak", "undel"),
         ("case", "", "on"),
+        ("cursorsize", "0", "2"),
         ("displaycursor", "", "x"),
         ("entab", "2", "3"),
         ("enterinsmode", "", "x"),

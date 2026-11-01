@@ -146,6 +146,12 @@ Numeric ranges: the manual gives no ranges. Unless a section says otherwise, a n
 - M1: yes.
 - Tests: default: search far down puts the match on window row 4; `hike:0` → row 0; `hike:-2` → error, unchanged.
 
+## cursorsize
+- Type: numeric. Default: not set. Project addition: not in the 1988 manual; the meaning follows the comment in a sample MEP TOOLS.INI ("Cursorsize:0 is underline, Cursorsize:1 is block cursor"). ORACLE CURSOR-1.
+- Values: 0 (underline) or 1 (block).
+- Effect: the cursor has that shape in insert and in overtype mode; the status line still shows `insert`. Not set: a bar in insert mode and a block in overtype mode (plan §7). Terminals that cannot change the cursor shape ignore it.
+- Tests: default not set (bar in insert mode, block in overtype mode); `cursorsize:0` → underline in both modes; `cursorsize:1` → block in both modes; `cursorsize:2` and `cursorsize:` → error, unchanged.
+
 ## height
 - Type: numeric. Default: the terminal height minus the dialog and status lines. Project decision (IMPLEMENTATION_PLAN.md §3.1, §6.3): the manual's default is 23 (p. 59); we use the terminal size and the switch only takes effect when set explicitly.
 - Values: 1–65535.

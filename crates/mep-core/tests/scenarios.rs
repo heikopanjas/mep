@@ -19,6 +19,7 @@
 //! - `-- fail read|write|rename|metadata|readdir|createdir PATH` (relative to `/work` or absolute), `-- resize COLS ROWS`
 //! - `-- expect file NAME [crlf] [noeol]`, `-- expect disk NAME …`, `-- expect cursor L C`, `-- expect window TOP LEFT`, `-- expect clipboard line|stream|box W`, `--
 //!   expect message [TEXT]`, `-- expect status`, `-- expect frame`, `-- expect result true|false`, `-- expect quit`, `-- expect waiting`, `-- expect current NAME`
+//! - `-- expect shape block|bar|underline` (the cursor shape),
 //! - `-- expect log` (the commands run so far, one per line: `run: …`, `shell: …`, `shell` for the interactive shell, `wait` for askrtn; clears the log), `-- expect
 //!   bell` (a bell rang since the last check)
 //!
@@ -774,6 +775,14 @@ fn run_case(case: &Case) -> Vec<String>
                 let busy = run.paused;
                 run.paused = false;
                 run.release(held, busy);
+            }
+            | ["expect", "shape", want] =>
+            {
+                let got = format!("{:?}", run.editor.render().shape).to_lowercase();
+                if got != *want
+                {
+                    failures.push(fail("shape", want, &got));
+                }
             }
             | ["expect", "log"] =>
             {

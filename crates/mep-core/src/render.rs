@@ -227,10 +227,12 @@ impl Editor
         }
         frame.put_str(0, self.rows.saturating_sub(1), &self.status(), self.switches.stacolor);
         frame.cursor = cursor;
-        frame.shape = match self.insert
+        // ORACLE: CURSOR-1
+        frame.shape = match (self.switches.cursorsize, self.insert)
         {
-            | true => CursorShape::Bar,
-            | false => CursorShape::Block
+            | (Some(0), _) => CursorShape::Underline,
+            | (Some(_), _) | (None, false) => CursorShape::Block,
+            | (None, true) => CursorShape::Bar
         };
         frame
     }

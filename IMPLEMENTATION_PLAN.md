@@ -430,7 +430,7 @@ Unknown switch → error message, no abort.
 - Request keyboard enhancement (kitty protocol: disambiguate escape codes, report alternate keys) when supported. Without it, document the collisions: Ctrl+M = Enter, Ctrl+[ = Esc, Ctrl+H = Backspace, Ctrl+I = Tab; Alt+key arrives as an Esc prefix. Check how crossterm reports Ctrl+J vs Enter in legacy mode.
 - Lone Esc vs. Esc prefix: rely on crossterm's parsing; verify that a single Esc (cancel) reacts without noticeable delay.
 - Key mapping: convert crossterm `KeyEvent` to `mep_core::keys::Key`. Keypad `+`/`-` (`num+`, `num-`) only when the terminal reports them distinctly.
-- Rendering: the core produces a full `Frame`; `mep-term` diffs it against the previous frame and writes only changes. Cursor shape: block in overtype, bar in insert mode (if supported).
+- Rendering: the core produces a full `Frame`; `mep-term` diffs it against the previous frame and writes only changes. Cursor shape: block in overtype, bar in insert mode (if supported); the project switch `cursorsize` (0 underline, 1 block) sets one shape for both modes (docs/spec/switches.md, ORACLE CURSOR-1).
 - Resize events → `Event::Resize`.
 - Threads (§3.5): an input thread runs the blocking `crossterm::event::read()` loop and sends events into the main channel; a render thread receives frames, drops all but the newest when it falls behind, diffs and writes. I/O and clipboard workers receive requests and send completions into the same channel.
 - The binary wires `mep-term` + `mep-clip` (`clipboard-rs` adapter; fallback to in-memory if construction fails) into the core.

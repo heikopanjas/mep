@@ -17,10 +17,12 @@ pub struct Cell
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CursorShape
 {
-    /// Overtype mode
+    /// Overtype mode, or `cursorsize:1`
     Block,
     /// Insert mode
-    Bar
+    Bar,
+    /// `cursorsize:0`
+    Underline
 }
 
 /// A full screen image

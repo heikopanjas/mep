@@ -146,7 +146,8 @@ pub fn cursor_style(shape: CursorShape) -> SetCursorStyle
     match shape
     {
         | CursorShape::Block => SetCursorStyle::SteadyBlock,
-        | CursorShape::Bar => SetCursorStyle::SteadyBar
+        | CursorShape::Bar => SetCursorStyle::SteadyBar,
+        | CursorShape::Underline => SetCursorStyle::SteadyUnderScore
     }
 }
 
@@ -466,6 +467,7 @@ mod tests
     {
         assert_eq!(cursor_style(CursorShape::Block), SetCursorStyle::SteadyBlock);
         assert_eq!(cursor_style(CursorShape::Bar), SetCursorStyle::SteadyBar);
+        assert_eq!(cursor_style(CursorShape::Underline), SetCursorStyle::SteadyUnderScore);
     }
 
     fn frame(text: &str) -> Frame
