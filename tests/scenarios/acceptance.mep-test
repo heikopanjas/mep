@@ -36,6 +36,25 @@ arg "x" backtab
 -- expect message Invalid argument
 -- expect result false
 
+== name: begfile clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta begfile
+-- expect meta off
+
+== name: begfile rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" begfile
+-- expect message Invalid argument
+-- expect result false
+
 == name: begline clears meta
 -- file a.txt
 one two
@@ -269,6 +288,25 @@ three
 -- args a.txt
 -- keys
 arg emacsnewl
+-- expect message Invalid argument
+-- expect result false
+
+== name: endfile clears meta
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+meta endfile
+-- expect meta off
+
+== name: endfile rejects an argument kind
+-- file a.txt
+one two
+three
+-- args a.txt
+-- keys
+arg "x" endfile
 -- expect message Invalid argument
 -- expect result false
 

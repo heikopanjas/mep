@@ -311,7 +311,7 @@ From the M 1.01 function list (MSJ Fig. 1) plus the M text-insertion functions. 
 | Group | Commands |
 |---|---|
 | Argument and control | `arg`, `meta`, `cancel`, `assign`, `execute`, `initialize`, `lasttext`, `unassigned`, `undo` |
-| Cursor movement | `left`, `right`, `up`, `down`, `begline`, `endline`, `home`, `pword`, `mword`, `plines`, `mlines`, `ppage`, `mpage`, `ppara`, `mpara` (ORACLE S4), `tab`, `backtab`, `newline`, `savecur`, `restcur` |
+| Cursor movement | `left`, `right`, `up`, `down`, `begline`, `endline`, `home`, `pword`, `mword`, `plines`, `mlines`, `ppage`, `mpage`, `ppara`, `mpara` (ORACLE S4), `begfile`, `endfile` (project additions, ORACLE CMD-BEGFILE-1), `tab`, `backtab`, `newline`, `savecur`, `restcur` |
 | Window (single window) | `setwindow` |
 | Editing | `graphic`, `insertmode`, `quote`, `cdelete`, `emacscdel`, `emacsnewl`, `sdelete`, `sinsert`, `ldelete`, `linsert` (MEP: inserts **above**), `pbal` |
 | Clipboard | `copy`, `paste` (ORACLE S5 for `arg arg textarg paste`; the `arg arg !textarg paste` / `arg arg !streamarg paste` form runs a command and inserts its stdout at the cursor, M guide p. 102 — M4, reports "not available" in M1) |

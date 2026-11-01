@@ -71,6 +71,7 @@ The command specs in `docs/spec/commands/` give the full manual text and reasoni
 | CMD-PASTE-3 | Paste failure value (Table 6.1 says always true) | False when a file insert fails | `alt+a alt+a "missing" shift+ins` in a macro with `->` |
 | CMD-PBAL-1 | Brace handling and insert mode (p. 103) | `()`, `[]`, `{}` with stack matching; inserted character follows insert mode | `{x` then `ctrl+[` |
 | CMD-PPAGE-1 | `Arg streamarg Ppage` (p. 27) | A highlighted number is the page count | Highlight `2`, `pgdn` |
+| CMD-BEGFILE-1 | No `begfile`/`endfile` in 1988; a sample MEP TOOLS.INI assigns `Begfile:Ctrl+PgUp` and `Endfile:Ctrl+PgDn` | Project addition: cursor functions moving as `Arg Mpage` and `Arg Ppage`, extending a selection in arg mode; no default keys | `Begfile:Ctrl+PgUp` and `Endfile:Ctrl+PgDn` in TOOLS.INI, `alt+a ctrl+pgdn` in mid-file |
 | CMD-PPARA-1 | Paragraph movement column and file end | Column 0; past the last paragraph the cursor goes past the end of the file | Inpara macro (p. 57) |
 | CMD-PWORD-1 | Word definition not stated | Letters, digits, `_` | `ctrl+right` over `a_b.c` |
 | CMD-RESTCUR-1 | `restcur` after switching files | False, nothing moves | `savecur`, `f2`, `restcur` |

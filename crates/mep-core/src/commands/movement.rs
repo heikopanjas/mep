@@ -331,14 +331,34 @@ pub(crate) fn mlines(ed: &mut Editor, arg: Arg) -> Step
     }
 }
 
+/// `begfile`: start of the file, as `arg mpage` (begfile.md)
+// ORACLE: CMD-BEGFILE-1
+pub(crate) fn begfile(ed: &mut Editor, _: Arg) -> Step
+{
+    // The window always shows the cursor, so with the cursor at the start it is already there.
+    let moved = ed.cursor() != Pos::default();
+    let view = ed.view_mut();
+    view.top = 0;
+    view.left = 0;
+    view.cursor = Pos::default();
+    Step::Done(moved)
+}
+
+/// `endfile`: last line of the file, as `arg ppage` (endfile.md)
+// ORACLE: CMD-BEGFILE-1
+pub(crate) fn endfile(ed: &mut Editor, _: Arg) -> Step
+{
+    let last = ed.last_line();
+    move_to(ed, Pos::new(last, 0))
+}
+
 /// `ppage`: pages forward; `arg ppage`: end of the file (ppage.md)
 // ORACLE: CMD-PPAGE-1
 pub(crate) fn ppage(ed: &mut Editor, arg: Arg) -> Step
 {
     if let Arg::Null { .. } = arg
     {
-        let last = ed.last_line();
-        return move_to(ed, Pos::new(last, 0));
+        return endfile(ed, arg);
     }
     match amount(&arg)
     {
@@ -352,13 +372,7 @@ pub(crate) fn mpage(ed: &mut Editor, arg: Arg) -> Step
 {
     if let Arg::Null { .. } = arg
     {
-        // The window always shows the cursor, so with the cursor at the start it is already there.
-        let moved = ed.cursor() != Pos::default();
-        let view = ed.view_mut();
-        view.top = 0;
-        view.left = 0;
-        view.cursor = Pos::default();
-        return Step::Done(moved);
+        return begfile(ed, arg);
     }
     match amount(&arg)
     {

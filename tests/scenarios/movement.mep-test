@@ -440,6 +440,78 @@ arg mpage
 arg mpage
 -- expect result false
 
+== name: endfile goes to the end and begfile to the start
+-- size 40 6
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+-- args a.txt
+-- keys
+down right endfile
+-- expect cursor 19 0
+-- expect window 16 0
+-- expect result true
+-- keys
+endfile
+-- expect result false
+-- keys
+begfile
+-- expect cursor 0 0
+-- expect window 0 0
+-- expect result true
+-- keys
+begfile
+-- expect result false
+
+== name: begfile scrolls the window back to the left column
+-- size 20 5
+-- file a.txt
+one
+abcdefghijklmnopqrstuvwxyzabcdefghij
+-- args a.txt
+-- keys
+down endline begfile
+-- expect cursor 0 0
+-- expect window 0 0
+
+== name: arg begfile and arg endfile select to the start and the end
+-- file a.txt
+one
+two
+three
+four
+-- args a.txt
+-- keys
+down down arg begfile copy
+-- expect clipboard line
+one
+two
+three
+-- keys
+begfile down arg endfile copy
+-- expect clipboard line
+two
+three
+four
+
 == name: streamarg ppage uses a highlighted number
 -- size 40 6
 -- file a.txt

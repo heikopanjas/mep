@@ -216,6 +216,23 @@ cd
 arg down initialize
 -- expect message Invalid argument
 
+== name: begfile and endfile can be assigned like in the sample tools.ini
+-- tools.ini
+[mep]
+Begfile:Ctrl+PgUp
+Endfile:Ctrl+PgDn
+-- file a.txt
+one
+two
+three
+-- args a.txt
+-- keys
+right ctrl+pgdn
+-- expect cursor 2 0
+-- keys
+ctrl+pgup
+-- expect cursor 0 0
+
 == name: cmd keys can be assigned and type nothing otherwise
 -- tools.ini
 [mep]

@@ -4,6 +4,15 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.15.0, begfile and endfile)
+
+- new project functions begfile and endfile: cursor functions that move to the start and the end of the file, as arg mpage and arg ppage, and extend a selection in arg mode (oracle cmd-begfile-1)
+- no default keys: ctrl+pgup and ctrl+pgdn stay mpara and ppara as in table a.2; the owner's sample tools.ini assigns them
+- sample configurations may now add a function, not only a switch, as a project addition after asking the owner
+- the mission statement no longer calls the project private; the repository is public
+- rationale: the owner's sample tools.ini from tenox7/ntutils uses begfile and endfile, and mep reported unknown function
+- version bump: 0.14.0 to 0.15.0 (MINOR - new functions)
+
 ### 2026-11-01 (v0.14.0, github remote)
 
 - the repository is published at git@github.com:heikopanjas/mep.git as origin, public, with everything including docs/sources; main tracks origin/main
