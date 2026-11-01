@@ -36,6 +36,7 @@ Non-goals for now: syntax highlighting, GUI, mouse support, Z editor behavior, t
 - **Coverage tool:** `cargo-llvm-cov`
 - **Check script:** `scripts/check.sh` (Linux, macOS; needs `jq`) and `scripts/check.ps1` (Windows), optional `--report` for an HTML coverage report in `target/llvm-cov/html`
 - **CI:** `.github/workflows/ci.yml` runs the check script on Ubuntu, macOS and Windows
+- **Line endings:** `.gitattributes` (`* text=auto eol=lf`) checks text files out with LF on every platform, as `.editorconfig` and rustfmt's `newline_style = "Unix"` require
 - **License:** MIT (`LICENSE`, `license = "MIT"` in the workspace manifest)
 
 ## Session Protocol

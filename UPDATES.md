@@ -4,6 +4,13 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.15.0, lf line endings on windows)
+
+- new .gitattributes with text=auto eol=lf: text files are checked out with lf on every platform
+- rationale: the first windows ci run failed in cargo fmt with incorrect newline style in every rust file; the runner checks out with crlf, while rustfmt is set to newline_style unix and .editorconfig to lf
+- all tracked files are already lf in the index, so nothing is renormalized
+- no version bump: no code change
+
 ### 2026-11-01 (v0.15.0, begfile and endfile)
 
 - new project functions begfile and endfile: cursor functions that move to the start and the end of the file, as arg mpage and arg ppage, and extend a selection in arg mode (oracle cmd-begfile-1)
