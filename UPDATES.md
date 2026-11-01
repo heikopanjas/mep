@@ -4,6 +4,13 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.14.0, github remote)
+
+- the repository is published at git@github.com:heikopanjas/mep.git as origin, public, with everything including docs/sources; main tracks origin/main
+- github's placeholder initial commit was replaced by a force push of the local history
+- rationale: the owner chose a public repository with the full history and sources
+- no version bump: no code change
+
 ### 2026-11-01 (v0.14.0, cursorsize switch)
 
 - new project switch cursorsize: 0 underline, 1 block, for insert and overtype mode; without it the cursor stays a bar in insert mode and a block in overtype mode (oracle cursor-1)

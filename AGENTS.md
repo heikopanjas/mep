@@ -29,7 +29,7 @@ Non-goals for now: syntax highlighting, GUI, mouse support, Z editor behavior, t
 - **Language:** Rust, nightly toolchain pinned in `rust-toolchain.toml` (currently `nightly-2026-10-31`, with `clippy`, `llvm-tools-preview` and `rustfmt`), edition 2024. `.rustfmt.toml` needs nightly rustfmt. Move the pin only on purpose, in its own commit
 - **Coverage data after a toolchain change:** run `cargo llvm-cov clean` (without `--workspace`) once; stale data from another toolchain produces bogus coverage reports
 - **Framework:** none; terminal I/O through `crossterm`, system clipboard through `clipboard-rs` (with its `wayland` feature on Linux; `wl-clipboard-rs` is held at 0.9.4 because 0.9.5 is younger than two weeks), OSC 52 in SSH sessions and when no desktop clipboard exists
-- **Version Control:** Git
+- **Version Control:** Git; public remote `origin` at `git@github.com:heikopanjas/mep.git`, `main` tracks `origin/main`
 - **Package Manager:** Cargo workspace (`crates/mep-core`, `crates/mep-term`, `crates/mep-clip`, `crates/mep-ext`, `crates/mep`); `Cargo.lock` is committed
 - **C extensions:** `crates/mep-ext/c/ext.h` and `exthdr.c` are our replacement for the 1988 `EXT.H`/`EXTHDR.OBJ`; `crates/mep/tests/filter.rs` compiles the MSJ `filter.c` with the platform C compiler (`$CC`, else `cc`, `clang` on Windows), so the check needs a C compiler
 - **Version manifest:** `[workspace.package] version` in the root `Cargo.toml`; all crates inherit it
