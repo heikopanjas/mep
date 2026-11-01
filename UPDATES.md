@@ -4,6 +4,18 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.9.0, modern regex syntax instead of mep dialect)
+
+- m2 uses the regex crate and its syntax for arg arg searches and replacements; mep's original dialect from chapter 5 of the m guide is dropped
+- replacement strings use $0, $1, ${name} and $$; case maps to the case-insensitive flag; matches stay within one line
+- removed fancy-regex from the allowed crates and rewrote implementation_plan.md section 10 and the m2 task list
+- rationale: owner decision; the original dialect is unfamiliar today, and the regex crate guarantees linear-time matching, which fits the large-document rule of section 3.5
+
+### 2026-11-01 (v0.9.0, pending m1 checks postponed)
+
+- postponed the linux and windows check script runs and the manual checklist on the remaining terminals; listed under Pending Verification in agents.md
+- rationale: owner decision; these need machines this session cannot reach
+
 ### 2026-11-01 (v0.9.0, m1 verification on macos)
 
 - cargo clippy with -D warnings passes for the whole workspace including tests on x86_64-unknown-linux-gnu and x86_64-pc-windows-msvc; running the tests there is still open

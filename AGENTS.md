@@ -172,6 +172,13 @@ Project overrides of the skill:
 - Load the `git-workflow` skill for the full message format, character limits, and examples before committing
 - Never add co-authorship trailers or any attribution naming an AI coding agent to commit messages
 
+## Pending Verification
+
+Postponed by the owner on 2026-11-01; M1 is not accepted until these pass:
+
+- `scripts/check.sh` on Linux and `scripts/check.ps1` on Windows (never run so far)
+- The M1 manual checklist (`IMPLEMENTATION_PLAN.md` §8) on Windows Terminal, iTerm2, Ghostty and a Linux terminal; it passed on macOS through a pty
+
 ## Recent Updates & Decisions
 
 Project decisions and notable changes are logged in `UPDATES.md`, below its changelog marker. The log is append-only: add new entries at the top, never edit or delete existing ones, and keep the "Last updated" timestamp in `AGENTS.md` in sync. Load the `recent-updates` skill for the entry format and full rules.

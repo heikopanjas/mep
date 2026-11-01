@@ -162,7 +162,7 @@ The editor is a state machine: `Editor::handle(event) -> Outcome` (`Continue` / 
 | `clipboard-rs` | mep-clip | System clipboard incl. custom formats on Windows, macOS, X11 (Wayland optional) |
 | `unicode-width` | mep-core | Cell widths |
 | `libloading` | M4 extension crate | Loading native extensions |
-| `regex` / `fancy-regex` | M2, mep-core | Regex backend after dialect translation (§10) |
+| `regex` | M2, mep-core | Regular expressions in the crate's own syntax (§10) |
 | `tempfile` (dev) | tests | Temp dirs for file I/O tests |
 | `proptest` (dev) | mep-core tests | Property tests for gap buffer and cell mapping |
 | `anyhow` | any crate | Error handling for fallible operations outside the command interface (commands still return `bool`, §0 rule 5) |
@@ -488,9 +488,9 @@ Order matters. Every task's "done when" **implicitly includes**: tests green on 
 - Ctrl+C / Ctrl+Z / Ctrl+\ do not kill or suspend the editor.
 
 ### M2 — Regex, replace, marks
-- Regex dialect (§10): parser for the MEP syntax → translation to `regex`/`fancy-regex`, or own matcher if semantics don't map. Standalone module with its own test suite (cases from both manuals).
+- Regular expressions with the `regex` crate (§10); MEP's original dialect is not implemented.
 - `arg arg` forms of `psearch`/`msearch`.
-- `replace`, `qreplace` with tagged groups `$0`–`$9`.
+- `replace`, `qreplace`; with `arg arg`, regex patterns and `$0`, `$1`…, `${name}` in the replacement.
 - `mark` and `markarg` (conversion in the dispatcher), `markfile` switch (persisted marks).
 
 ### M3 — Windows and sessions
@@ -571,11 +571,16 @@ File I/O and line endings run on all three OSes. The clipboard adapter has an `#
 
 ---
 
-## 10. Regex dialect (for M2, shared with Z)
+## 10. Regular expressions (M2)
 
-`\` escape, `?` any char, `[..]` class, `[~..]` negated class, `^` / `$` anchors, `X*` and `X+` **minimal** repetition, `X@` and `X#` **maximal** repetition, `(a!b!c)` alternation tried left to right with backtracking, `~X` not-X, `X^n` exactly n times, `{..}` tag groups → `$0`–`$9` in replacements, predefined `:a :b :c :d :f :h :i :n :p :q :w :z`. `arg arg` = regex, single `arg` = literal.
+Project decision (2026-11-01): MEP's original regex dialect (`?`, `[~..]`, minimal `*`/`+`, `@`/`#`, `(a!b)`, `~X`, `{..}` tags, `:a`–`:z` classes; M guide Chapter 5) is **not** implemented. Patterns use the syntax of the `regex` crate (Perl-like: `.`, `[^..]`, `*?`, `|`, `(?:..)`, `\d`, `\w`, named groups). This deliberately departs from the manual (§0 rule 2).
 
-Known manual errors to **not** copy (from the Z guide): "X+ is shorthand for XX+" (means XX*); `:h` is `[0-9a-fA-F]#` (M's fix). Confirm each predefined class against the M guide.
+- `arg arg` = regular expression, single `arg` = literal text (escaped with `regex::escape`), as in the original.
+- The `case` switch selects case-sensitive matching; off = the case-insensitive flag.
+- A match lies within one line, as for plain search (§6.11); `^` and `$` are line start and end.
+- Replacement strings use the crate's syntax: `$0` whole match, `$1`… groups, `${name}`, `$$` a literal `$`.
+- An invalid pattern: the crate's error message on the dialog line, the command returns false.
+- `regex` guarantees linear-time matching, so a pattern can never stall the editor on a large document (§3.5). A pattern is compiled once per search or replace, not per line.
 
 ---
 
