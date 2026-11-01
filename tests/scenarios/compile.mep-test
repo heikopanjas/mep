@@ -1,0 +1,190 @@
+== name: arg compile runs the extmake command and goes to the first message
+-- tools.ini
+[mep]
+extmake:c cc %s
+-- file a.c
+int a;
+int b;
+int c;
+-- file b.c
+x
+y
+-- run cc /work/a.c
+a.c:2:5: error: first
+b.c(1, 1): warning: second
+cc: 2 errors
+-- args a.c
+-- keys
+arg compile
+-- expect result true
+-- expect log
+run: cc /work/a.c
+-- expect bell
+-- expect cursor 1 4
+-- expect message error: first
+-- expect file <compile>
+a.c:2:5: error: first
+b.c(1, 1): warning: second
+cc: 2 errors
+-- keys
+compile
+-- expect current b.c
+-- expect cursor 0 0
+-- expect message warning: second
+-- keys
+compile
+-- expect message No more compile messages
+-- expect result false
+-- keys
+arg meta compile
+-- expect current a.c
+-- expect cursor 1 4
+-- keys
+arg meta compile
+-- expect message No previous compile message
+-- expect result false
+
+== name: maxmsg limits how far arg meta compile goes back
+-- tools.ini
+[mep]
+maxmsg:1
+-- run grep -n x a.txt
+a.txt:1:x
+a.txt:2:x
+a.txt:3:x
+-- file a.txt
+x
+x
+x
+-- args a.txt
+-- keys
+arg arg "grep -n x a.txt" compile compile compile
+-- expect cursor 2 0
+-- keys
+arg meta compile
+-- expect cursor 1 0
+-- keys
+arg meta compile
+-- expect message No previous compile message
+
+== name: meta compile skips the messages of the current file
+-- run make
+a.txt:1:x
+a.txt:2:y
+b.txt:2:z
+-- file a.txt
+1
+2
+-- file b.txt
+1
+2
+-- args a.txt
+-- keys
+arg arg "make" compile
+-- expect cursor 0 0
+-- keys
+meta compile
+-- expect current b.txt
+-- expect cursor 1 0
+-- expect message z
+-- keys
+meta compile
+-- expect message No more compile messages
+
+== name: a modified file is saved before arg compile; argcompile does the same
+-- tools.ini
+[mep]
+extmake:txt check %s
+-- run check /work/a.txt
+-- file a.txt
+a
+-- args a.txt
+-- keys
+"x" argcompile
+-- expect disk a.txt
+x
+-- expect message Compile finished
+-- expect log
+run: check /work/a.txt
+-- keys
+arg compile
+-- expect log
+run: check /work/a.txt
+
+== name: arg textarg compile uses the text's extension, then text
+-- tools.ini
+[mep]
+extmake:text make %s
+extmake:c cc -c %s
+-- run make foo
+-- run cc -c x.c
+-- keys
+arg "foo" compile
+-- expect log
+run: make foo
+-- keys
+arg "x.c" compile
+-- expect log
+run: cc -c x.c
+
+== name: missing extmake commands and pseudo-files fail
+-- tools.ini
+[mep]
+extmake:c cc %s
+-- file a.txt
+a
+-- keys
+arg compile
+-- expect message No file name
+-- expect result false
+-- keys
+arg "a.txt" setfile arg compile
+-- expect message No extmake command for .txt
+-- expect result false
+-- keys
+argcompile
+-- expect result false
+-- keys
+arg "x.pas" compile
+-- expect message No extmake command for .pas
+-- keys
+arg arg " " compile
+-- expect message Invalid argument
+
+== name: compile without messages reports how it ended
+-- run fail make
+make: *** No rule
+-- keys
+compile
+-- expect message No more compile messages
+-- keys
+arg arg "make" compile
+-- expect bell
+-- expect message Compile failed (see <compile>)
+-- keys
+arg arg "nothing" compile
+-- expect file <compile> noeol
+nothing: not found
+
+== name: a compile that ends while a command waits only reports the messages
+-- run make
+a.txt:1:x
+-- file a.txt
+1
+-- keys
+hold arg arg "make" compile refresh
+-- release
+-- expect message 1 compile messages
+-- keys
+"n" compile
+-- expect message x
+-- expect current a.txt
+
+== name: arg compile rejects selections over several lines
+-- file a.txt
+ab
+cd
+-- args a.txt
+-- keys
+arg down right compile
+-- expect message Invalid argument

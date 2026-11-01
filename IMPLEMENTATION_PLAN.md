@@ -110,7 +110,8 @@ mep/
 │   ├── mep-core/           # all editor logic; no terminal, no OS clipboard
 │   ├── mep-term/           # crossterm front end: Terminal trait impl, key decoding
 │   ├── mep-clip/           # SystemClipboard trait impls (clipboard-rs; OSC 52 in M3)
-│   └── mep/                # binary: CLI parsing, wiring, event loop
+│   ├── mep-ext/            # C extensions (M4): ABI structs, callbacks, libloading; c/ext.h, c/exthdr.c, c/filter.c
+│   └── mep/                # binary: CLI parsing, wiring, event loop, shell host, job thread
 ├── docs/
 │   ├── sources/            # manuals (provided)
 │   ├── spec/commands/      # one file per command, transcribed from the manual
@@ -119,7 +120,7 @@ mep/
 └── tests/scenarios/        # scenario test files (§9.3)
 ```
 
-`mep-core` has `#![forbid(unsafe_code)]`. Unsafe code is only allowed in the future extension crate (M4).
+`mep-core` has `#![forbid(unsafe_code)]`. Unsafe code is only allowed in the extension crate `mep-ext` (M4) and in the excluded glue file `mep/src/sys.rs` (the Windows console control handler).
 
 ### 4.2 Core boundaries (traits)
 
@@ -161,7 +162,9 @@ The editor is a state machine: `Editor::handle(event) -> Outcome` (`Continue` / 
 | `crossterm` | mep-term | Windows console + VT, resize events, keyboard enhancement (kitty protocol) |
 | `clipboard-rs` | mep-clip | System clipboard incl. custom formats on Windows, macOS, X11 (Wayland optional) |
 | `unicode-width` | mep-core | Cell widths |
-| `libloading` | M4 extension crate | Loading native extensions |
+| `libloading` | mep-ext (M4) | Loading native extensions |
+| `signal-hook` | mep, Unix only (M4) | Ignoring SIGINT/SIGQUIT/SIGTSTP in the editor while `shell` runs a program (`mep/src/sys.rs`) |
+| `windows-sys` | mep, Windows only (M4) | `SetConsoleCtrlHandler` for the same on Windows (`mep/src/sys.rs`) |
 | `regex` | M2, mep-core | Regular expressions in the crate's own syntax (§10) |
 | `tempfile` (dev) | tests | Temp dirs for file I/O tests |
 | `proptest` (dev) | mep-core tests | Property tests for gap buffer and cell mapping |
@@ -522,7 +525,7 @@ cargo llvm-cov report --branch \
 ```
 
 Rules:
-- **Exclusions are exactly these three files** (§7). They contain only calls into the OS, no logic. Adding a file to the list requires the owner's OK. The Linux clipboard path in `system.rs` is additionally exercised by an `#[ignore]` integration test run manually.
+- **Exclusions are exactly these four files** (§7): `mep-term/src/sys.rs`, `mep-clip/src/system.rs`, `mep/src/main.rs` and `mep/src/sys.rs` (signal handling while `shell` runs, M4). They contain only calls into the OS, no logic. Adding a file to the list requires the owner's OK. The Linux clipboard path in `system.rs` is additionally exercised by an `#[ignore]` integration test run manually.
 - 100% **lines, functions, regions and branches**. Branch coverage needs nightly (`--branch`); the toolchain is pinned to a nightly (§3.4).
 - **Test code is not measured**: every crate root with unit tests has `#![cfg_attr(test, feature(coverage_attribute))]` and every test module `#[cfg(test)] #[coverage(off)]`. Otherwise each assertion adds a branch that a passing test never takes. Integration test crates put `#![feature(coverage_attribute)]` and `#![coverage(off)]` at their root.
 - No `unreachable!()` / `todo!()` / `unimplemented!()` arms in non-test code: they are uncovered regions by definition. Express invariants through types instead.

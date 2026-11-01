@@ -30,7 +30,8 @@ Non-goals for now: syntax highlighting, GUI, mouse support, Z editor behavior, t
 - **Coverage data after a toolchain change:** run `cargo llvm-cov clean` (without `--workspace`) once; stale data from another toolchain produces bogus coverage reports
 - **Framework:** none; terminal I/O through `crossterm`, system clipboard through `clipboard-rs` (with its `wayland` feature on Linux; `wl-clipboard-rs` is held at 0.9.4 because 0.9.5 is younger than two weeks), OSC 52 in SSH sessions and when no desktop clipboard exists
 - **Version Control:** Git
-- **Package Manager:** Cargo workspace (`crates/mep-core`, `crates/mep-term`, `crates/mep-clip`, `crates/mep`); `Cargo.lock` is committed
+- **Package Manager:** Cargo workspace (`crates/mep-core`, `crates/mep-term`, `crates/mep-clip`, `crates/mep-ext`, `crates/mep`); `Cargo.lock` is committed
+- **C extensions:** `crates/mep-ext/c/ext.h` and `exthdr.c` are our replacement for the 1988 `EXT.H`/`EXTHDR.OBJ`; `crates/mep/tests/filter.rs` compiles the MSJ `filter.c` with the platform C compiler (`$CC`, else `cc`, `clang` on Windows), so the check needs a C compiler
 - **Version manifest:** `[workspace.package] version` in the root `Cargo.toml`; all crates inherit it
 - **Coverage tool:** `cargo-llvm-cov`
 - **Check script:** `scripts/check.sh` (Linux, macOS; needs `jq`) and `scripts/check.ps1` (Windows), optional `--report` for an HTML coverage report in `target/llvm-cov/html`
@@ -107,8 +108,9 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - **ORACLE items**: where the manual is ambiguous, implement the manual's reading and mark code and test with `// ORACLE: <id>`; record the item in `docs/oracle.md`. ORACLE tests stay active
 - **No panics on user input**: every command returns `bool`; failure means `false` plus a message on the dialog line
 - **Core isolation**: `mep-core` holds all editor logic, has `#![forbid(unsafe_code)]`, and never touches `std::fs`, `std::env`, the clock, the terminal or the OS clipboard directly; it goes through the `Terminal`, `SystemClipboard`, `Fs` and `Env` traits
-- **OS glue files** (`mep-term/src/sys.rs`, `mep-clip/src/system.rs`, `mep/src/main.rs`) contain only calls into the OS, no logic
-- **Dependencies**: only the crates listed in `IMPLEMENTATION_PLAN.md` §4.3, which include `anyhow` and `clap`. Any other crate, runtime or dev, needs a one-line justification and the owner's OK. FNV-1a 64 is implemented in-house. A crate is added to a `Cargo.toml` only when code first uses it
+- **OS glue files** (`mep-term/src/sys.rs`, `mep-clip/src/system.rs`, `mep/src/main.rs`, `mep/src/sys.rs`) contain only calls into the OS, no logic; they are the only files excluded from coverage
+- **Unsafe code** lives only in `mep-ext` (C extension ABI) and in `mep/src/sys.rs` (Windows console control handler); every unsafe block has a `// SAFETY:` comment
+- **Dependencies**: only the crates listed in `IMPLEMENTATION_PLAN.md` §4.3, which include `anyhow`, `clap`, `regex`, `libloading` (mep-ext), `signal-hook` (mep, Unix) and `windows-sys` (mep, Windows). Any other crate, runtime or dev, needs a one-line justification and the owner's OK. FNV-1a 64 is implemented in-house. A crate is added to a `Cargo.toml` only when code first uses it
 - **Large documents** (`IMPLEMENTATION_PLAN.md` §3.5): the editor must never slow down or freeze on large files. The core stays a deterministic single-threaded state machine; input, rendering, file I/O, clipboard and jobs run on `std::thread` workers with `mpsc` channels (no async runtime). Commands that need I/O suspend and resume on a completion event. The cost of an edit depends on the size of the edit, not the size of the file
 - **Local time**: `curdate`/`curtime` read `/etc/localtime` or `TZ` with the TZif parser in `crates/mep/src/tz.rs` (no time crate); Windows falls back to UTC until a solution is approved
 - **Byte-exact round trip**: never normalize unedited lines (terminators, tabs, trailing spaces, invalid UTF-8)
@@ -134,7 +136,7 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - No `unreachable!()`, `todo!()` or `unimplemented!()` in non-test code; express invariants through types
 - Every error path is reached by a test through in-memory fakes (`Fs` with injectable failures, failing `SystemClipboard`, failing `impl Write`)
 - Tests assert behavior, not just execution
-- Scenario tests: format documented at the top of `crates/mep-core/tests/scenarios.rs`; `~` marks an empty body line, `key:NAME` forces a key event when NAME is also a function, `-- fail`, `-- inject`, `hold`/`-- release` reach I/O error and suspension paths; `-- env XDG_CONFIG_HOME=/cfg` enables the information file at `/cfg/mep/mep.tmp`, `-- temporary` stands for `-t`
+- Scenario tests: format documented at the top of `crates/mep-core/tests/scenarios.rs`; `~` marks an empty body line, `key:NAME` forces a key event when NAME is also a function, `-- fail`, `-- inject`, `hold`/`-- release` reach I/O error and suspension paths; `-- env XDG_CONFIG_HOME=/cfg` enables the information file at `/cfg/mep/mep.tmp`, `-- temporary` stands for `-t`; `-- run [fail] CMD` scripts command output for `compile`/`paste`/`shell`, `-- expect log` checks what ran, `-- expect bell`; `load:probe.so` loads the scripted `probe` extension whose text argument is a callback command, `-- readkeys` feeds `ReadChar`/`ReadCmd`; macros in `-- tools.ini` stand in for macro text with quotes (harness keys cannot escape quotes)
 - Coverage across test binaries: unit tests and the scenario harness build separate copies of `mep-core`, and the gate takes each function's best copy. A function the scenarios call must be fully covered by scenarios; a fallback that scenarios cannot reach belongs in a separate function covered by unit tests
 - Avoid generic parameters (`impl Fn`, `W: Write`) on functions whose tests pass different types: each instantiation is measured on its own. Use `&mut dyn FnMut` or `Box<dyn Write>`
 - Testing framework: built-in `cargo test`, `proptest`, `tempfile`
@@ -182,6 +184,12 @@ Postponed by the owner on 2026-11-01; M1 is not accepted until these pass:
 Also postponed by the owner on 2026-11-01; M3 is not accepted until these pass:
 
 - Copy and paste on Wayland and X11 desktops, and OSC 52 copies over SSH reaching the local clipboard
+
+M4 checks still open:
+
+- The extension acceptance test (`crates/mep/tests/filter.rs`) and `shell`/`compile` on Linux and on Windows (clang and `cmd /C`); macOS passed
+- Ctrl+C during a `shell` command on Windows (`SetConsoleCtrlHandler`); macOS passed through a pty
+- Shift+F3 (`compile`) on terminals without the kitty keyboard protocol: crossterm reads the xterm sequence `CSI 1;2R` as a cursor position report and drops it
 
 ## Recent Updates & Decisions
 

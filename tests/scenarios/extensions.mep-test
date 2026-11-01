@@ -1,0 +1,398 @@
+== name: loading registers functions and switches and runs WhenLoaded
+-- tools.ini
+[mep]
+load:probe.so
+probe:x
+-- expect log
+init 7 true
+-- keys
+alt+p
+-- expect result true
+-- expect log
+probe: 0 None { y: 0, x: 0 } key 0 meta false
+-- keys
+x meta probe
+-- expect log
+probe: 0 None { y: 0, x: 0 } key 120 meta false
+probe: 0 None { y: 0, x: 0 } key 0 meta true
+
+== name: arguments are converted before the call
+-- tools.ini
+[mep]
+load:probe.so
+-- file a.txt
+abcd
+efgh
+ijkl
+-- args a.txt
+-- keys
+right arg probe
+arg arg "word" probe
+arg "2" probe
+arg down probe
+arg right right probe
+arg down right probe
+arg right right probebox
+-- expect log
+init 7 true
+probe: 0 Null { count: 1, y: 0, x: 1 } key 0 meta false
+probe: 0 Text { count: 2, y: 0, x: 1, text: "word" } key 0 meta false
+probe: 0 Line { count: 1, start: 0, end: 1 } key 0 meta false
+probe: 0 Line { count: 1, start: 0, end: 1 } key 0 meta false
+probe: 0 Stream { count: 1, x_start: 1, y_start: 1, x_end: 3, y_end: 1 } key 0 meta false
+probe: 0 Box { count: 1, left: 3, top: 1, right: 3, bottom: 2 } key 0 meta false
+probe: 2 Text { count: 1, y: 2, x: 4, text: "" } key 0 meta false
+
+== name: an extension cannot replace a built-in function
+-- tools.ini
+[mep]
+load:probe.so
+-- file a.txt
+one two
+-- args a.txt
+-- keys
+arg "two" psearch
+-- expect cursor 0 4
+-- expect log
+init 7 true
+
+== name: extension switches take their values
+-- tools.ini
+[mep]
+load:probe.so
+probeflag:
+noprobeflag:
+probenum:5
+probetext:SORT <
+-- expect log
+init 7 true
+switch 0 Boolean(true)
+switch 0 Boolean(false)
+switch 1 Numeric(5)
+switch 2 Special("SORT <")
+-- keys
+arg "probeflag:x" assign
+-- expect message probeflag: a Boolean switch takes no value
+-- expect result false
+-- keys
+arg "probenum:x" assign
+-- expect message probenum: expected a number
+-- keys
+arg "probetext:bad" assign
+-- expect message probetext: value rejected by the extension
+-- keys
+arg "noprobenum:" assign
+-- expect message noprobenum: unknown function, macro or switch
+-- expect log
+switch 2 Special("bad")
+
+== name: load failures and loading twice
+-- keys
+arg "load:missing.so" assign
+-- expect message missing.so: cannot load extension: /work/missing.so: no such library
+-- expect result false
+-- keys
+arg "load:<x>" assign
+-- expect message <x>: cannot load extension: not a file name
+-- keys
+arg "load:probe.so" assign arg "load:probe.so" assign
+-- expect result true
+-- expect log
+init 7 true
+
+== name: file handles, lengths and lines
+-- tools.ini
+[mep]
+load:probe.so
+-- file a.txt
+one\ttwo
+three
+-- file b.txt
+b
+-- args a.txt
+-- keys
+arg "handle -" probe
+arg "add <scratch>" probe
+arg "add a.txt" probe
+arg "handle <scratch>" probe
+arg "handle x a.txt" probe
+arg "handle /none.txt none" probe
+arg "length ." probe
+arg "length 99" probe
+arg "getline 0 ." probe
+arg "getline 7 ." probe
+arg "getline 0 99" probe
+arg "cursor" probe
+arg "msg hello there" probe
+-- expect message hello there
+-- expect log
+init 7 true
+probe: 0
+probe: 3
+probe: 2
+probe: 3
+probe: 2
+probe: 0
+probe: 2
+probe: 0
+probe: one     two
+probe:
+probe:
+probe: (0, 0)
+probe: 11
+
+== name: copying and deleting lines, streams and boxes between files
+-- tools.ini
+[mep]
+load:probe.so
+-- file a.txt
+abcdef
+ghijkl
+mnopqr
+-- args a.txt
+-- keys
+arg "add <x>" probe
+arg "copyline a.txt <x> 0 1 0" probe
+arg "copyline 0 <x> 0 0 1" probe
+arg "copyline a.txt <x> 5 6 0" probe
+arg "copyline a.txt <x> 2 9 0" probe
+arg "copystream a.txt <x> 4 0 2 1 1 0" probe
+arg "copybox a.txt <x> 1 1 2 2 0 3" probe
+-- expect file <x>
+mef
+ghnopqr
+abcdef
+hi
+noghijkl
+-- keys
+arg "delstream <x> 1 0 0 1" probe
+arg "delbox <x> 0 1 1 2" probe
+arg "delline <x> 3 9" probe
+arg "delline <x> 7 9" probe
+-- expect file <x>
+mghnopqr
+cdef
+~
+-- keys
+arg "delfile <x>" probe
+-- expect file <x> noeol
+-- expect file a.txt
+abcdef
+ghijkl
+mnopqr
+
+== name: replacing characters, putting lines, cursor and current file
+-- tools.ini
+[mep]
+load:probe.so
+-- file a.txt
+abc
+-- file b.txt
+b
+-- args a.txt
+-- keys
+arg "replace X 1 0 . over" probe
+arg "replace Y 0 0 . insert" probe
+arg "replace Z 6 2 . over" probe
+arg "replace Q 0 0 99 over" probe
+arg "putline 1 . new line" probe
+arg "putline 4 . far" probe
+arg "move 2 1" probe
+-- expect cursor 1 2
+-- expect file a.txt
+YaXc
+new line
+      Z
+~
+far
+-- expect log
+init 7 true
+probe: true
+probe: true
+probe: true
+probe: false
+probe:
+probe:
+probe:
+-- keys
+arg "add b.txt" probe arg "top b.txt" probe
+-- expect current b.txt
+-- keys
+arg "top 99" probe
+-- expect current b.txt
+
+== name: reading and writing disk files
+-- tools.ini
+[mep]
+load:probe.so
+-- file in.txt
+from disk
+-- keys
+arg "add <x>" probe
+arg "read in.txt <x>" probe
+arg "read <pseudo> <x>" probe
+arg "read missing.txt <x>" probe
+arg "read in.txt 99" probe
+arg "write out.txt <x>" probe
+arg "write <y> <x>" probe
+arg "write out.txt 99" probe
+-- expect disk out.txt
+from disk
+-- expect file <x>
+from disk
+-- expect log
+init 7 true
+probe: 2
+probe: true
+probe: true
+probe: false
+probe: false
+probe: true
+probe: false
+probe: false
+-- fail write /work/fail.txt
+-- keys
+arg "write fail.txt <x>" probe
+-- expect log
+probe: false
+
+== name: removing files keeps the windows on open files
+-- tools.ini
+[mep]
+load:probe.so
+-- file a.txt
+a
+-- file b.txt
+b
+-- args a.txt
+-- keys
+arg "add b.txt" probe arg "b.txt" setfile arg "a.txt" setfile
+arg "remove b.txt" probe
+-- expect current a.txt
+-- keys
+arg "b.txt" setfile arg "remove ." probe
+-- expect current a.txt
+-- keys
+arg "remove 99" probe
+-- expect current a.txt
+
+== name: messages, bad arguments, display, keyboard and keys
+-- tools.ini
+[mep]
+load:probe.so
+-- readkeys f8 f9
+-- keys
+arg "badarg" probe
+-- expect message Invalid argument
+-- expect result false
+-- keys
+arg "display" probe arg "unhook" probe arg "hook" probe
+arg "setkey probe f12" probe arg "setkey nothing f12" probe
+arg "char" probe
+arg "cmd" probe
+arg "cmd" probe
+-- expect log
+init 7 true
+probe: false
+probe:
+keyboard false
+probe:
+keyboard true
+probe:
+probe: true
+probe: false
+probe: 0
+probe: Some("meta")
+probe: None
+
+== name: typed-ahead keys come first for ReadChar
+-- tools.ini
+[mep]
+load:probe.so
+-- file a.txt
+a
+-- keys
+hold arg "a.txt" setfile alt+a "char" alt+p "y"
+-- release
+-- expect log
+init 7 true
+probe: 121
+-- expect file a.txt
+a
+
+== name: fExecute runs macros to the end and serves their I/O at once
+-- tools.ini
+[mep]
+load:probe.so
+open:=arg "b.txt" setfile
+find:=arg "needle" psearch
+output:=arg arg "!echo hi" paste
+build:=arg "make" shell
+-- file a.txt
+a
+-- file b.txt
+x
+y
+needle
+-- run echo hi
+hi
+-- slice 1
+-- args a.txt
+-- keys
+arg "exec open" probe
+-- expect current b.txt
+-- keys
+arg "exec find" probe
+-- expect cursor 2 0
+-- keys
+arg "exec output" probe
+-- expect file b.txt
+x
+y
+hi
+needle
+-- keys
+arg "exec build" probe
+arg "exec refresh" probe
+arg "exec initialize" probe
+arg "exec nothing" probe
+-- expect message nothing: unknown function
+-- expect log
+init 7 true
+probe: true
+probe: true
+run: echo hi
+probe: true
+shell: make
+wait
+probe: true
+probe: false
+probe: false
+probe: false
+
+== name: a reversed stream copies nothing; removing a file shown in another window
+-- tools.ini
+[mep]
+load:probe.so
+-- file a.txt
+l0
+l1
+l2
+l3
+l4
+l5
+l6
+-- file b.txt
+b
+-- args a.txt
+-- size 20 14
+-- keys
+arg "add <x>" probe
+arg "copystream a.txt <x> 0 3 1 1 0 0" probe
+-- expect file <x> noeol
+-- keys
+down down down down down down arg window arg "b.txt" setfile window
+-- expect current a.txt
+-- keys
+arg "remove b.txt" probe window
+-- expect current a.txt

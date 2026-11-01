@@ -9,7 +9,15 @@ publish.workspace = true
 clap = { version = "4.6.7", features = ["derive"] }
 mep-clip = { path = "../mep-clip" }
 mep-core = { path = "../mep-core" }
+mep-ext = { path = "../mep-ext" }
 mep-term = { path = "../mep-term" }
+
+# Ignoring interrupt signals while a shell command runs (sys.rs)
+[target.'cfg(unix)'.dependencies]
+signal-hook = { version = "0.3.18", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_System_Console"] }
 
 [dev-dependencies]
 proptest = "1.12.0"

@@ -4,7 +4,7 @@
 use anyhow::anyhow;
 
 use crate::{
-    Result, cmd,
+    Result,
     editor::{Answer, Arg, ArgState, Editor, Pending, Step, TextArg, Then},
     file::FileName,
     ini,
@@ -264,9 +264,18 @@ impl Editor
         }
         if Switches::is_switch(name) == true
         {
-            return self.switches.set(name, value);
+            self.switches.set(name, value)?;
+            return match name.eq_ignore_ascii_case("load")
+            {
+                | true => self.load_extension(value.trim()),
+                | false => Ok(())
+            };
         }
-        let known = cmd::is_function(name) || self.macros.get(name).is_some();
+        if let Some(result) = self.set_ext_switch(name, value)
+        {
+            return result;
+        }
+        let known = self.is_function(name) || self.macros.get(name).is_some();
         require!(known, Err(anyhow!("{name}: unknown function, macro or switch")));
         let key = Key::parse(value.trim())?;
         self.keymap.assign(key, &name.to_lowercase());
@@ -281,7 +290,7 @@ impl Editor
         {
             match item
             {
-                | Item::Call(name) if cmd::is_function(name) == false && self.macros.get(name).is_none() => return Err(anyhow!("{name}: unknown function")),
+                | Item::Call(name) if self.is_function(name) == false && self.macros.get(name).is_none() => return Err(anyhow!("{name}: unknown function")),
                 | Item::Jump(_, Some(label)) if items.contains(&Item::Label(label.clone())) == false => return Err(anyhow!("Macro label not found: {label}")),
                 | _ =>
                 {}

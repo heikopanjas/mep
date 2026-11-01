@@ -1,7 +1,7 @@
 //! Command table (IMPLEMENTATION_PLAN.md §6.5, §6.7; M guide p. 72; docs/spec/commands)
 
 use crate::{
-    commands::{clipboard, edit, files, info, marks, misc, movement, replace, search, windows},
+    commands::{clipboard, compile, edit, files, info, marks, misc, movement, replace, search, shell, windows},
     editor::{Arg, Editor, Step}
 };
 
@@ -72,13 +72,13 @@ const INSERT: u32 = NOARG | MODIFIES;
 /// All built-in functions, sorted by name
 const TABLE: &[Desc] = &[
     Desc { name: "arg", flags: RAW | KEEPMETA, func: misc::arg },
-    Desc { name: "argcompile", flags: RAW, func: misc::not_available },
+    Desc { name: "argcompile", flags: NOARG, func: compile::argcompile },
     Desc { name: "assign", flags: NULLARG | NULLEOL | TEXTARG | BOXSTR | LINEARG | BOXARG, func: misc::assign },
     Desc { name: "backtab", flags: MOVE, func: movement::backtab },
     Desc { name: "begline", flags: MOVE | TEXTEDIT, func: movement::begline },
     Desc { name: "cancel", flags: RAW, func: misc::cancel },
     Desc { name: "cdelete", flags: NOARG | MODIFIES | TEXTEDIT, func: edit::cdelete },
-    Desc { name: "compile", flags: RAW, func: misc::not_available },
+    Desc { name: "compile", flags: NOARG | NULLARG | TEXTARG | BOXSTR, func: compile::compile },
     Desc { name: "copy", flags: NOARG | NULLARG | BOXARG | LINEARG | STREAMARG | TEXTARG | NUMARG | MARKARG, func: clipboard::copy },
     Desc { name: "curdate", flags: INSERT, func: misc::curdate },
     Desc { name: "curday", flags: INSERT, func: misc::curday },
@@ -128,7 +128,7 @@ const TABLE: &[Desc] = &[
     Desc { name: "sdelete", flags: NOARG | NULLARG | STREAMARG | MARKARG | MODIFIES | TEXTEDIT, func: edit::sdelete },
     Desc { name: "setfile", flags: NOARG | NULLARG | TEXTARG | BOXSTR, func: files::setfile },
     Desc { name: "setwindow", flags: NOARG | NULLARG | WINDOWFUNC, func: movement::setwindow },
-    Desc { name: "shell", flags: RAW, func: misc::not_available },
+    Desc { name: "shell", flags: NOARG | NULLARG | NULLEOL | TEXTARG | BOXSTR | LINEARG | BOXARG, func: shell::shell },
     Desc { name: "sinsert", flags: NOARG | NULLARG | STREAMARG | MARKARG | MODIFIES | TEXTEDIT, func: edit::sinsert },
     Desc { name: "tab", flags: MOVE, func: movement::tab },
     Desc { name: "unassigned", flags: RAW | KEEPMETA, func: misc::unassigned },

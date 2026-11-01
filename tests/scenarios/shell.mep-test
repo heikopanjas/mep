@@ -1,0 +1,98 @@
+== name: shell saves a modified file and runs the interactive shell
+-- file a.txt
+a
+-- args a.txt
+-- keys
+"x" shell
+-- expect result true
+-- expect disk a.txt
+x
+-- expect log
+shell
+wait
+
+== name: meta shell does not save; noaskrtn does not wait
+-- tools.ini
+[mep]
+noaskrtn:
+-- file a.txt
+a
+-- args a.txt
+-- keys
+"x" meta shell
+-- expect disk a.txt
+a
+-- expect log
+shell
+
+== name: arg shell runs the rest of the line
+-- file a.txt
+run ls -l  
+-- args a.txt
+-- keys
+right right right right arg shell
+-- expect log
+shell: ls -l
+wait
+
+== name: arg textarg shell runs the text and returns its success
+-- run fail make
+-- keys
+arg "make" shell
+-- expect result false
+-- keys
+arg "echo ok" shell
+-- expect result true
+-- expect log
+shell: make
+wait
+shell: echo ok
+wait
+
+== name: line and box selections run each line
+-- file a.txt
+xx one
+~
+xx two
+-- args a.txt
+-- keys
+arg down down shell
+-- expect log
+shell: xx one
+shell: xx two
+wait
+-- keys
+arg mpage right right right arg down down endline shell
+-- expect log
+shell: one
+shell: two
+wait
+
+== name: empty commands are rejected
+-- file a.txt
+~
+~
+-- args a.txt
+-- keys
+arg down shell
+-- expect message Invalid argument
+-- expect result false
+
+== name: a macro continues with the shell result
+-- tools.ini
+[mep]
+build:=arg "make" shell +>ok arg "failed" paste => :>ok arg "built" paste
+-- keys
+build
+-- expect file <untitled> noeol
+built
+
+== name: shell does not save an unmodified file or a modified file without a name
+-- keys
+shell "x" shell
+-- expect log
+shell
+wait
+shell
+wait
+-- expect result true

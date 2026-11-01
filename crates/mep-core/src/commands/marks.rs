@@ -56,7 +56,7 @@ impl Editor
     {
         if let Some((file, pos)) = self.marks.get(&name.to_lowercase()).cloned()
         {
-            return self.jump_to_mark(file, pos);
+            return self.jump_to(file, pos);
         }
         match FileName::parse(&self.switches.markfile, &self.env.cwd())
         {
@@ -70,7 +70,7 @@ impl Editor
     }
 
     /// Puts the cursor at a position in a file, switching files if needed
-    fn jump_to_mark(&mut self, file: FileName, pos: Pos) -> Step
+    pub(crate) fn jump_to(&mut self, file: FileName, pos: Pos) -> Step
     {
         if file == self.file().name
         {
@@ -100,7 +100,7 @@ impl Editor
         });
         match found
         {
-            | Some((file, pos)) => self.jump_to_mark(FileName::Disk(resolve(&dir, &file)), pos),
+            | Some((file, pos)) => self.jump_to(FileName::Disk(resolve(&dir, &file)), pos),
             | None => self.fail(&format!("{name}: mark not found"))
         }
     }

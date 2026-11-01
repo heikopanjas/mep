@@ -22,7 +22,7 @@ foreach ($arg in $args)
 Set-Location (Join-Path $PSScriptRoot '..')
 
 # The only files excluded from coverage: OS glue without logic (§7).
-$ignore = '(mep-term[/\\]src[/\\]sys\.rs|mep-clip[/\\]src[/\\]system\.rs|mep[/\\]src[/\\]main\.rs)$'
+$ignore = '(mep-term[/\\]src[/\\]sys\.rs|mep-clip[/\\]src[/\\]system\.rs|mep[/\\]src[/\\]main\.rs|mep[/\\]src[/\\]sys\.rs)$'
 
 # Native commands do not throw on failure; stop at the first non-zero exit code.
 function Assert-Success

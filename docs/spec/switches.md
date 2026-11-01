@@ -216,24 +216,24 @@ Numeric ranges: the manual gives no ranges. Unless a section says otherwise, a n
 ## maxmsg
 - Type: numeric. Default: 10 (M guide p. 59).
 - Values: 0–65535.
-- Effect (M4): number of compile messages kept for `Arg Meta Compile` (p. 59, p. 95). The manual restricts it to an OS/2 `[M-10.0]` section; we accept it in any section. M1: accepted and stored, no effect.
+- Effect: number of compile messages `Arg Meta Compile` can go back (p. 59, p. 95); see compile.md. The manual restricts it to an OS/2 `[M-10.0]` section; we accept it in any section.
 - Tests: default 10; `maxmsg:20` stored; `maxmsg:x` → error, unchanged.
 
 ## extmake
 - Type: text. Default: none (M guide p. 62).
 - Values: `extension commandline`, e.g. `extmake:c cl /c %s`; the special extension `text` is used for `Arg textarg Compile` (p. 62). May appear several times; a later line for the same extension replaces the earlier one. A value without a command after the extension is invalid.
-- Effect (M4): command run by `compile` for files with that extension; `%s` is replaced by the file name or text argument. M1: accepted and stored, no effect.
+- Effect: command run by `compile` for files with that extension; `%s` is replaced by the file name or text argument; see compile.md.
 - Tests: default none; `extmake:c cc -c %s` and `extmake:text make %s` both stored; `extmake:c` and `extmake:` → error.
 
 ## askrtn
 - Type: boolean. Default: on (M guide p. 61).
-- Effect (M4): after `shell`, wait for Enter before returning (p. 61). M1: accepted and stored, no effect.
+- Effect: after `shell`, wait for Enter before returning (p. 61); see shell.md.
 - Tests: default on; `noaskrtn:` (p. 61 example) stored as off; `askrtn:x` → error, unchanged.
 
 ## load
 - Type: text. Default: none (M guide p. 62; MSJ "load:filter.mxt").
 - Values: a file name of an extension library.
-- Effect (M4): loads a C-ABI extension; may be set at any time, also with `assign` (MSJ). M1: accepted and stored, nothing is loaded and no message is shown.
+- Effect: loads a C extension library; may be set at any time, also with `assign` (MSJ); see docs/spec/extensions.md. A library that cannot be loaded is an error like an invalid value.
 - Tests: default none; `load:filter.so` stored, nothing loaded; `load:` (empty) → error, unchanged.
 
 ## vmbuf

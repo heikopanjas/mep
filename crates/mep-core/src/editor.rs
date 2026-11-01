@@ -12,17 +12,21 @@ use std::{
 
 use crate::{
     clip::{Clip, ClipboardPayload, Shape},
-    cmd::{self, Desc, flags},
+    cmd::{Desc, flags},
     commands::{
+        compile::Messages,
         replace::{Replace, Span},
         search::Search
     },
     env::{Env, Os},
+    ext::SwitchKind,
     file::{File, FileId, FileName, FileTable},
     history::Entry,
+    host::{Host, NoHost},
     io::{Completion, Reply, Request, RequestId, RequestKind},
     keys::{Key, KeyCode, Keymap},
     macros::{Item, Jump, Macros},
+    run::Run,
     switches::Switches,
     view::{Pos, View},
     window::{Layout, Rect, Tile}
@@ -56,6 +60,10 @@ pub struct Outcome
     pub quit:     bool,
     /// Requests for the worker threads
     pub requests: Vec<Request>,
+    /// Commands for the job thread
+    pub runs:     Vec<Run>,
+    /// Ring the terminal bell (a compile ended)
+    pub bell:     bool,
     /// The front end should repaint every cell (`setwindow`)
     pub redraw:   bool,
     /// A long operation continues: call [`Editor::tick`] when no input is waiting
@@ -254,6 +262,11 @@ pub(crate) enum Then
     {
         pos: Pos
     },
+    /// Insert the output of a command at a position
+    InsertOutput
+    {
+        pos: Pos
+    },
     /// Apply TOOLS.INI sections
     Ini
     {
@@ -309,7 +322,11 @@ pub(crate) enum After
         advance: bool
     },
     /// A copy was written under another name; the file keeps its state
-    Copied
+    Copied,
+    /// Start a compile
+    Compile(String),
+    /// Run the interactive shell
+    Shell
 }
 
 /// Target of a file switch
@@ -374,7 +391,7 @@ pub(crate) struct FileState
 
 /// A running macro
 #[derive(Debug)]
-struct Frame
+pub(crate) struct Frame
 {
     items: Rc<[Item]>,
     pc:    usize
@@ -393,55 +410,63 @@ enum Job
 /// The editor
 pub struct Editor
 {
-    pub(crate) env:          Box<dyn Env>,
-    pub(crate) exe:          String,
-    pub(crate) cols:         u16,
-    pub(crate) rows:         u16,
-    pub(crate) files:        FileTable,
-    pub(crate) current:      FileId,
-    pub(crate) previous:     Option<FileId>,
-    pub(crate) states:       HashMap<FileId, FileState>,
-    pub(crate) windows:      Vec<Window>,
-    pub(crate) layout:       Layout,
-    pub(crate) active:       usize,
-    pub(crate) file_list:    Vec<String>,
-    pub(crate) history:      Vec<Entry>,
-    pub(crate) temporary:    bool,
-    pub(crate) next_file:    usize,
-    pub(crate) keymap:       Keymap,
-    pub(crate) macros:       Macros,
-    pub(crate) switches:     Switches,
-    pub(crate) insert:       bool,
-    pub(crate) meta:         bool,
-    pub(crate) arg:          Option<ArgState>,
-    pub(crate) message:      Option<(String, MessageKind)>,
-    pub(crate) clip:         Clip,
-    pub(crate) written:      Option<ClipboardPayload>,
-    pub(crate) clip_warned:  bool,
-    pub(crate) search:       Option<(String, bool)>,
-    pub(crate) last_find:    String,
-    pub(crate) last_replace: String,
-    pub(crate) marks:        HashMap<String, (FileName, Pos)>,
-    pub(crate) jump_back:    Option<(FileId, View)>,
-    pub(crate) before:       Option<(usize, FileId, View)>,
-    pub(crate) goto:         Option<Pos>,
-    pub(crate) last_text:    Vec<char>,
-    pub(crate) saved_cursor: Option<(FileId, Pos)>,
-    pub(crate) result:       bool,
-    pub(crate) typed:        Option<char>,
-    pub(crate) last_key:     Option<Key>,
-    pub(crate) undo_file:    Option<FileId>,
-    pub(crate) highlight:    Option<(Pos, usize)>,
-    pub(crate) pending:      Option<Pending>,
-    pub(crate) function:     &'static str,
-    pub(crate) redraw:       bool,
-    pub(crate) slice_lines:  usize,
-    frames:                  Vec<Frame>,
-    jobs:                    VecDeque<Job>,
-    typeahead:               VecDeque<Key>,
-    requests:                Vec<Request>,
-    next_id:                 RequestId,
-    pub(crate) quit:         bool
+    pub(crate) env:           Box<dyn Env>,
+    pub(crate) host:          Rc<dyn Host>,
+    pub(crate) runs:          Vec<Run>,
+    pub(crate) compiles:      Vec<RequestId>,
+    pub(crate) messages:      Messages,
+    pub(crate) bell:          bool,
+    pub(crate) ext_functions: HashMap<&'static str, (&'static Desc, usize)>,
+    pub(crate) ext_switches:  HashMap<String, (SwitchKind, usize)>,
+    pub(crate) loaded:        Vec<PathBuf>,
+    pub(crate) exe:           String,
+    pub(crate) cols:          u16,
+    pub(crate) rows:          u16,
+    pub(crate) files:         FileTable,
+    pub(crate) current:       FileId,
+    pub(crate) previous:      Option<FileId>,
+    pub(crate) states:        HashMap<FileId, FileState>,
+    pub(crate) windows:       Vec<Window>,
+    pub(crate) layout:        Layout,
+    pub(crate) active:        usize,
+    pub(crate) file_list:     Vec<String>,
+    pub(crate) history:       Vec<Entry>,
+    pub(crate) temporary:     bool,
+    pub(crate) next_file:     usize,
+    pub(crate) keymap:        Keymap,
+    pub(crate) macros:        Macros,
+    pub(crate) switches:      Switches,
+    pub(crate) insert:        bool,
+    pub(crate) meta:          bool,
+    pub(crate) arg:           Option<ArgState>,
+    pub(crate) message:       Option<(String, MessageKind)>,
+    pub(crate) clip:          Clip,
+    pub(crate) written:       Option<ClipboardPayload>,
+    pub(crate) clip_warned:   bool,
+    pub(crate) search:        Option<(String, bool)>,
+    pub(crate) last_find:     String,
+    pub(crate) last_replace:  String,
+    pub(crate) marks:         HashMap<String, (FileName, Pos)>,
+    pub(crate) jump_back:     Option<(FileId, View)>,
+    pub(crate) before:        Option<(usize, FileId, View)>,
+    pub(crate) goto:          Option<Pos>,
+    pub(crate) last_text:     Vec<char>,
+    pub(crate) saved_cursor:  Option<(FileId, Pos)>,
+    pub(crate) result:        bool,
+    pub(crate) typed:         Option<char>,
+    pub(crate) last_key:      Option<Key>,
+    pub(crate) undo_files:    Vec<FileId>,
+    pub(crate) highlight:     Option<(Pos, usize)>,
+    pub(crate) pending:       Option<Pending>,
+    pub(crate) function:      &'static str,
+    pub(crate) redraw:        bool,
+    pub(crate) slice_lines:   usize,
+    pub(crate) frames:        Vec<Frame>,
+    jobs:                     VecDeque<Job>,
+    pub(crate) typeahead:     VecDeque<Key>,
+    pub(crate) requests:      Vec<Request>,
+    next_id:                  RequestId,
+    pub(crate) quit:          bool
 }
 
 impl Editor
@@ -462,6 +487,14 @@ impl Editor
         jobs.extend(startup.execute.into_iter().map(Job::Execute));
         Self {
             env,
+            host: Rc::new(NoHost),
+            runs: Vec::new(),
+            compiles: Vec::new(),
+            messages: Messages::default(),
+            bell: false,
+            ext_functions: HashMap::new(),
+            ext_switches: HashMap::new(),
+            loaded: Vec::new(),
             exe: startup.exe,
             cols: startup.cols,
             rows: startup.rows,
@@ -498,7 +531,7 @@ impl Editor
             result: true,
             typed: None,
             last_key: None,
-            undo_file: None,
+            undo_files: Vec::new(),
             highlight: None,
             pending: None,
             function: "",
@@ -647,7 +680,14 @@ impl Editor
         }
         self.follow();
         let busy = matches!(self.pending, Some(Pending::Search(_) | Pending::Replace(_)));
-        Outcome { quit: self.quit, requests: std::mem::take(&mut self.requests), redraw: std::mem::take(&mut self.redraw), busy }
+        Outcome {
+            quit: self.quit,
+            requests: std::mem::take(&mut self.requests),
+            runs: std::mem::take(&mut self.runs),
+            bell: std::mem::take(&mut self.bell),
+            redraw: std::mem::take(&mut self.redraw),
+            busy
+        }
     }
 
     /// Starts a new top-level command: new undo step, cleared message
@@ -655,7 +695,7 @@ impl Editor
     {
         self.before = Some((self.active, self.current, self.view()));
         self.goto = None;
-        self.undo_file = None;
+        self.undo_files.clear();
         self.highlight = None;
         self.message = None;
         self.last_key = key;
@@ -742,7 +782,7 @@ impl Editor
     }
 
     /// Delivers a worker completion
-    fn completed(&mut self, completion: Completion)
+    pub(crate) fn completed(&mut self, completion: Completion)
     {
         match self.pending.take()
         {
@@ -750,12 +790,22 @@ impl Editor
             | pending =>
             {
                 self.pending = pending;
-                // Clipboard writes are not awaited; a failure is reported once (plan §6.9).
-                if let Reply::ClipboardWritten(false) = completion.reply &&
-                    self.clip_warned == false
+                match completion.reply
                 {
-                    self.clip_warned = true;
-                    self.error("System clipboard not available; using the internal clipboard");
+                    // Clipboard writes are not awaited; a failure is reported once (plan §6.9).
+                    | Reply::ClipboardWritten(false) if self.clip_warned == false =>
+                    {
+                        self.clip_warned = true;
+                        self.error("System clipboard not available; using the internal clipboard");
+                    }
+                    // Compiles run in the background; a cancelled `!` paste ends here too and is dropped.
+                    | Reply::Ran(result) if self.compiles.contains(&completion.id) =>
+                    {
+                        self.compiles.retain(|id| *id != completion.id);
+                        self.compile_done(result);
+                    }
+                    | _ =>
+                    {}
                 }
             }
         }
@@ -769,6 +819,7 @@ impl Editor
             | Then::Ini { tags, startup } => self.ini_loaded(&tags, startup, answer),
             | Then::Paste => self.paste_read(answer),
             | Then::InsertFile { pos } => self.insert_loaded(pos, answer),
+            | Then::InsertOutput { pos } => self.insert_output(pos, answer),
             | then @ (Then::ReplaceFind { .. } | Then::ReplaceWith { .. }) => self.replace_continue(then, answer),
             | Then::MarkFile { name } => self.mark_continue(&name, answer),
             | Then::History => self.history_loaded(answer),
@@ -796,9 +847,23 @@ impl Editor
         self.next_id
     }
 
+    /// Queues a command line for the job thread and returns its id
+    pub(crate) fn start_run(&mut self, command: String, stdout_only: bool) -> RequestId
+    {
+        self.next_id += 1;
+        self.runs.push(Run { id: self.next_id, command, cwd: self.env.cwd(), stdout_only });
+        self.next_id
+    }
+
+    /// Sets the services the core waits for; the default host cannot run anything
+    pub fn set_host(&mut self, host: Rc<dyn Host>)
+    {
+        self.host = host;
+    }
+
     /// Runs one macro item; the macro's value is the value of the last function it ran
     // ORACLE: MACRO-1
-    fn step_macro(&mut self)
+    pub(crate) fn step_macro(&mut self)
     {
         let top = self.frames.len() - 1;
         let frame = &mut self.frames[top];
@@ -893,7 +958,7 @@ impl Editor
                 self.frames.push(Frame { items: items.into(), pc: 0 });
             }
         }
-        else if let Some(desc) = cmd::find(&name)
+        else if let Some(desc) = self.function_desc(&name)
         {
             self.dispatch(desc);
         }
@@ -1478,7 +1543,13 @@ mod tests
     #[test]
     fn test_continuations_with_unexpected_answers_return_false()
     {
-        for then in [Then::Paste, Then::InsertFile { pos: Pos::default() }, Then::Ini { tags: Vec::new(), startup: false }, Then::Quit]
+        for then in [
+            Then::Paste,
+            Then::InsertFile { pos: Pos::default() },
+            Then::InsertOutput { pos: Pos::default() },
+            Then::Ini { tags: Vec::new(), startup: false },
+            Then::Quit
+        ]
         {
             let mut ed = editor(&[]);
             ed.resume(then, Answer::No);

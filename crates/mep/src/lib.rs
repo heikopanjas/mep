@@ -17,13 +17,21 @@ macro_rules! require {
 }
 
 pub mod cli;
+pub mod host;
 pub mod os;
+pub mod process;
+pub mod sys;
 pub mod tz;
 
 use std::{
+    any::Any,
     ffi::OsString,
-    io::Write,
-    sync::mpsc::{self, Receiver, Sender},
+    io::{self, Write},
+    rc::Rc,
+    sync::{
+        Arc, PoisonError,
+        mpsc::{self, Receiver, Sender}
+    },
     thread
 };
 
@@ -32,27 +40,42 @@ use mep_core::{
     clip::SystemClipboard,
     env::Env,
     frame::Frame,
-    io::{Fs, Request, serve}
+    io::{Fs, Request, serve},
+    run::{Run, Runner, execute}
 };
-use mep_term::Screen;
+use mep_ext::Extensions;
+use mep_term::{InputGate, Screen, SharedOut};
+
+use crate::{
+    host::{Inbox, SharedClipboard, TerminalHost},
+    process::interactive_shell
+};
 
 /// The operating system pieces the editor runs on
 pub struct Platform
 {
     /// Environment and clock
-    pub env:       Box<dyn Env>,
-    /// File system, used by the I/O worker
-    pub fs:        Box<dyn Fs + Send>,
-    /// System clipboard, used by the I/O worker
-    pub clipboard: Box<dyn SystemClipboard + Send>,
-    /// Terminal output, used by the render thread
-    pub screen:    Screen,
+    pub env:        Box<dyn Env>,
+    /// File system, used by the I/O worker and extensions
+    pub fs:         Arc<dyn Fs + Send + Sync>,
+    /// System clipboard, used by the I/O worker and extensions
+    pub clipboard:  SharedClipboard,
+    /// Runs `compile` and `paste` commands, used by the job thread and extensions
+    pub runner:     Arc<dyn Runner + Send + Sync>,
+    /// Terminal output, shared by the render thread, `shell` and the bell
+    pub out:        SharedOut,
     /// Terminal size as (columns, rows)
-    pub size:      (u16, u16),
-    /// Switches the terminal into editing mode; called only after the command line parsed
-    pub enter:     Box<dyn FnOnce() -> std::io::Result<()>>,
-    /// Restores the terminal
-    pub leave:     Box<dyn FnOnce() -> std::io::Result<()>>
+    pub size:       (u16, u16),
+    /// Switches the terminal into editing mode; called after the command line parsed and after `shell`
+    pub enter:      Rc<dyn Fn() -> io::Result<()>>,
+    /// Restores the terminal; called before `shell` and at the end
+    pub leave:      Rc<dyn Fn() -> io::Result<()>>,
+    /// Waits for Enter after `shell` (`askrtn`)
+    pub wait_enter: Box<dyn Fn() -> io::Result<()>>,
+    /// Keeps interrupt signals away from the editor while `shell` runs a program and the guard lives
+    pub quiet:      Box<dyn Fn() -> Box<dyn Any>>,
+    /// Stops the input thread while `shell` runs a program
+    pub gate:       Arc<InputGate>
 }
 
 /// Picks the system clipboard (plan §3.3)
@@ -73,11 +96,21 @@ pub fn select_clipboard(
 }
 
 /// Serves requests until the editor closes the request channel (plan §3.5)
-fn work(requests: Receiver<Request>, events: Sender<Event>, fs: Box<dyn Fs + Send>, mut clipboard: Box<dyn SystemClipboard + Send>)
+fn work(requests: Receiver<Request>, events: Sender<Event>, fs: Arc<dyn Fs + Send + Sync>, clipboard: SharedClipboard)
 {
     for request in requests
     {
-        let _ = events.send(Event::Completed(serve(request, fs.as_ref(), clipboard.as_mut())));
+        let completion = serve(request, fs.as_ref(), clipboard.lock().unwrap_or_else(PoisonError::into_inner).as_mut());
+        let _ = events.send(Event::Completed(completion));
+    }
+}
+
+/// Runs background commands one after another until the editor closes the channel (plan §3.5)
+fn run_jobs(runs: Receiver<Run>, events: Sender<Event>, runner: Arc<dyn Runner + Send + Sync>)
+{
+    for run in runs
+    {
+        let _ = events.send(Event::Completed(execute(run, runner.as_ref())));
     }
 }
 
@@ -137,19 +170,50 @@ pub fn run(args: Vec<OsString>, platform: Platform, input: Box<dyn FnOnce(Sender
         temporary: options.temporary
     };
     let (events, incoming) = mpsc::channel();
+    let inbox = Rc::new(Inbox::new(incoming));
+    let host = TerminalHost {
+        suspend:     platform.leave.clone(),
+        resume:      platform.enter.clone(),
+        wait_enter:  platform.wait_enter,
+        quiet:       platform.quiet,
+        gate:        platform.gate,
+        out:         platform.out.clone(),
+        os:          platform.env.os(),
+        interactive: interactive_shell(platform.env.as_ref()),
+        cwd:         platform.env.cwd(),
+        fs:          platform.fs.clone(),
+        clipboard:   platform.clipboard.clone(),
+        runner:      platform.runner.clone(),
+        inbox:       inbox.clone(),
+        extensions:  Extensions::default()
+    };
     let (requests, worker_requests) = mpsc::channel();
+    let (jobs, job_runs) = mpsc::channel();
     let (frames, render_frames) = mpsc::channel();
-    let (worker_events, render_events) = (events.clone(), events.clone());
+    let (worker_events, job_events, render_events) = (events.clone(), events.clone(), events.clone());
     let worker = thread::spawn(move || work(worker_requests, worker_events, platform.fs, platform.clipboard));
-    let renderer = thread::spawn(move || render(render_frames, platform.screen, render_events));
+    // A compile still running at exit is not waited for.
+    thread::spawn(move || run_jobs(job_runs, job_events, platform.runner));
+    let screen = Screen::new(Box::new(platform.out.clone()));
+    let renderer = thread::spawn(move || render(render_frames, screen, render_events));
     input(events);
     let mut editor = Editor::new(platform.env, startup);
+    editor.set_host(Rc::new(host));
+    let mut out = platform.out;
     let mut outcome = editor.start();
     loop
     {
         for request in outcome.requests.drain(..)
         {
             let _ = requests.send(request);
+        }
+        for run in outcome.runs.drain(..)
+        {
+            let _ = jobs.send(run);
+        }
+        if outcome.bell == true
+        {
+            let _ = out.write_all(b"\x07").and_then(|()| out.flush());
         }
         if outcome.quit == true
         {
@@ -158,11 +222,7 @@ pub fn run(args: Vec<OsString>, platform: Platform, input: Box<dyn FnOnce(Sender
         // A render thread that failed has already sent Event::Close, which ends the editor.
         let _ = frames.send((editor.render(), outcome.redraw));
         // While a long operation runs, input is polled and the next slice runs when none waits.
-        let event = match outcome.busy
-        {
-            | true => incoming.try_recv().ok(),
-            | false => incoming.recv().ok()
-        };
+        let event = inbox.next(outcome.busy == false);
         outcome = match event
         {
             | Some(event) => editor.handle(event),
@@ -235,42 +295,6 @@ mod tests
         }
     }
 
-    /// A file system the test can still read after `run` took it
-    struct SharedFs(Arc<MemFs>);
-
-    impl Fs for SharedFs
-    {
-        fn read(&self, path: &std::path::Path) -> io::Result<Vec<u8>>
-        {
-            self.0.read(path)
-        }
-
-        fn write_atomic(&self, path: &std::path::Path, data: &[u8]) -> io::Result<()>
-        {
-            self.0.write_atomic(path, data)
-        }
-
-        fn rename(&self, from: &std::path::Path, to: &std::path::Path) -> io::Result<()>
-        {
-            self.0.rename(from, to)
-        }
-
-        fn metadata(&self, path: &std::path::Path) -> io::Result<mep_core::io::FileMeta>
-        {
-            self.0.metadata(path)
-        }
-
-        fn read_dir_names(&self, dir: &std::path::Path) -> io::Result<Vec<OsString>>
-        {
-            self.0.read_dir_names(dir)
-        }
-
-        fn create_dir_all(&self, dir: &std::path::Path) -> io::Result<()>
-        {
-            self.0.create_dir_all(dir)
-        }
-    }
-
     #[test]
     fn test_select_clipboard_prefers_osc52_in_remote_sessions()
     {
@@ -288,21 +312,71 @@ mod tests
         assert_eq!(pick(&[("SSH_CONNECTION", "1 2 3 4")], true), "osc52");
     }
 
-    fn platform(fs: MemFs, out: Box<dyn Write + Send>) -> Platform
+    /// Runs nothing; every command prints its own command line as a compile message
+    struct Echo;
+
+    impl Runner for Echo
     {
-        platform_with(Box::new(fs), out)
+        fn capture(&self, command: &str, _: &std::path::Path, _: bool) -> io::Result<mep_core::run::Ran>
+        {
+            Ok(mep_core::run::Ran { success: true, output: format!("a.txt:1:{command}\n").into_bytes() })
+        }
     }
 
-    fn platform_with(fs: Box<dyn Fs + Send>, out: Box<dyn Write + Send>) -> Platform
+    #[test]
+    fn test_compile_runs_in_the_job_thread_and_rings_the_bell()
+    {
+        let fs = MemFs::default().with_file("/work/a.txt", b"one\n");
+        let out = Shared::default();
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let input: Box<dyn FnOnce(Sender<Event>)> = Box::new(|events| {
+            for name in ["alt+a", "alt+a", "m", "shift+f3"]
+            {
+                events.send(Event::Key(Key::parse(name).unwrap())).unwrap();
+            }
+            thread::spawn(move || {
+                thread::sleep(std::time::Duration::from_millis(300));
+                let _ = events.send(Event::Key(Key::parse("f8").unwrap()));
+                // Ends the test even if the exit key went astray.
+                thread::sleep(std::time::Duration::from_millis(2000));
+                let _ = events.send(Event::Close);
+            });
+        });
+        assert_eq!(run(args(&[]), platform(fs, Box::new(out.clone())), input, &mut stdout, &mut stderr), 0);
+        let screen = String::from_utf8_lossy(&out.0.lock().unwrap()).into_owned();
+
+        assert!(screen.contains('\u{7}'));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_shell_hands_the_terminal_to_the_command()
+    {
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let code =
+            run(args(&[]), platform(MemFs::default(), Box::new(Shared::default())), keys(&["alt+a", "e", "x", "i", "t", "shift+f9", "f8"]), &mut stdout, &mut stderr);
+        assert_eq!(code, 0);
+    }
+
+    fn platform(fs: MemFs, out: Box<dyn Write + Send>) -> Platform
+    {
+        platform_with(Arc::new(fs), out)
+    }
+
+    fn platform_with(fs: Arc<dyn Fs + Send + Sync>, out: Box<dyn Write + Send>) -> Platform
     {
         Platform {
             env: Box::new(FixedEnv::default()),
             fs,
-            clipboard: Box::new(MemClipboard::default()),
-            screen: Screen::new(out),
+            clipboard: Arc::new(Mutex::new(Box::new(MemClipboard::default()))),
+            runner: Arc::new(Echo),
+            out: SharedOut::new(out),
             size: (40, 6),
-            enter: Box::new(|| Ok(())),
-            leave: Box::new(|| Ok(()))
+            enter: Rc::new(|| Ok(())),
+            leave: Rc::new(|| Ok(())),
+            wait_enter: Box::new(|| Ok(())),
+            quiet: Box::new(|| Box::new(())),
+            gate: Arc::new(InputGate::default())
         }
     }
 
@@ -330,15 +404,12 @@ mod tests
         let fs = Arc::new(MemFs::default().with_file("/work/a.txt", b"one\n"));
         let out = Shared::default();
         let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
-        let code = run(args(&["a.txt"]), platform_with(Box::new(SharedFs(fs.clone())), Box::new(out.clone())), keys(&["X", "f8"]), &mut stdout, &mut stderr);
+        let code = run(args(&["a.txt"]), platform_with(fs.clone(), Box::new(out.clone())), keys(&["X", "f8"]), &mut stdout, &mut stderr);
         assert_eq!(code, 0);
         assert_eq!(fs.file("/work/a.txt").unwrap(), b"xne\n");
         let screen = String::from_utf8_lossy(&out.0.lock().unwrap()).into_owned();
         assert!(screen.contains("/work/a.txt"));
         assert!(stderr.is_empty());
-        let shared = SharedFs(fs);
-        assert!(shared.rename(std::path::Path::new("/work/a.txt"), std::path::Path::new("/work/b.txt")).is_ok());
-        assert_eq!(shared.read_dir_names(std::path::Path::new("/work")).unwrap(), vec![OsString::from("b.txt")]);
     }
 
     #[test]
@@ -407,7 +478,7 @@ mod tests
     {
         let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
         let mut platform = platform(MemFs::default(), Box::new(Shared::default()));
-        platform.enter = Box::new(|| Err(io::Error::other("not a tty")));
+        platform.enter = Rc::new(|| Err(io::Error::other("not a tty")));
         assert_eq!(run(args(&[]), platform, keys(&[]), &mut stdout, &mut stderr), 1);
         assert_eq!(String::from_utf8(stderr).unwrap(), "mep: cannot use the terminal: not a tty\n");
     }

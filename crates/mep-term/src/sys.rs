@@ -3,7 +3,11 @@
 //! Raw mode keeps the terminal from turning Ctrl+C, Ctrl+Z, Ctrl+\, Ctrl+S and
 //! Ctrl+Q into signals or flow control; MEP binds several of them.
 
-use std::io::{self, stdout};
+use std::{
+    io::{self, stdout},
+    sync::OnceLock,
+    time::Duration
+};
 
 use crossterm::{
     cursor::SetCursorStyle,
@@ -12,12 +16,16 @@ use crossterm::{
     terminal::{self, EnterAlternateScreen, LeaveAlternateScreen}
 };
 
+use crate::InputGate;
+
 /// Enters raw mode and the alternate screen, and asks for unambiguous key codes where supported
 pub fn enter() -> io::Result<()>
 {
     terminal::enable_raw_mode()?;
     execute!(stdout(), EnterAlternateScreen)?;
-    if terminal::supports_keyboard_enhancement().unwrap_or(false)
+    // The query waits for an answer the first time; returning from `shell` must not wait again.
+    static ENHANCED: OnceLock<bool> = OnceLock::new();
+    if *ENHANCED.get_or_init(|| terminal::supports_keyboard_enhancement().unwrap_or(false))
     {
         execute!(stdout(), PushKeyboardEnhancementFlags(KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES | KeyboardEnhancementFlags::REPORT_ALTERNATE_KEYS))?;
     }
@@ -42,10 +50,23 @@ pub fn install_panic_hook()
     }));
 }
 
-/// Waits for the next terminal event
-pub fn read() -> io::Result<event::Event>
+/// Waits for the next terminal event, stopping at the gate's checkpoint while a program has the terminal
+pub fn read(gate: &InputGate) -> io::Result<event::Event>
 {
-    event::read()
+    loop
+    {
+        gate.checkpoint();
+        if event::poll(Duration::from_millis(50))?
+        {
+            return event::read();
+        }
+    }
+}
+
+/// Waits until Enter is pressed, with the terminal in its normal mode
+pub fn wait_enter() -> io::Result<()>
+{
+    io::stdin().read_line(&mut String::new()).map(|_| ())
 }
 
 /// Returns the terminal size as (columns, rows)

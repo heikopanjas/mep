@@ -138,7 +138,9 @@ pub enum Reply
     /// Result of [`RequestKind::ClipboardRead`]; `None` if the clipboard is unavailable
     ClipboardRead(Option<ClipboardPayload>),
     /// Result of [`RequestKind::ClipboardWrite`]
-    ClipboardWritten(bool)
+    ClipboardWritten(bool),
+    /// Result of a [`crate::run::Run`]
+    Ran(io::Result<crate::run::Ran>)
 }
 
 /// A worker's answer to a request

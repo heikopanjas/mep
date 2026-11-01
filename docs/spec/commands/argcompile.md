@@ -4,24 +4,22 @@ Default keys: F5
 Source: M guide p. 93 (Table A.3 "Performs the Arg Compile command"), p. 89 (Table A.1), p. 50 (Table 6.1); IMPLEMENTATION_PLAN.md §6.7, §8 M4
 
 ## Flags
-For M4: NOARG (one syntax line); it behaves as `Arg Compile`.
+NOARG. Not KEEPMETA.
 
 ## Behavior
+### noarg
+Same as `Arg Compile` (compile.md): saves a modified current file, then compiles it with the `extmake` command for its extension in the background. True if the compile started; false with a message for a pseudo-file or a missing `extmake` command (Table 6.1).
 
-### M1
-In M1 the command is in the command table so it can be assigned, used in macros and listed, but it does nothing: every invocation (any argument kind, with or without meta) shows `not available` on the dialog line and returns false (IMPLEMENTATION_PLAN.md §6.7). A pending argument and meta are consumed and cleared. The file, cursor and clipboard do not change.
-
-### Later (M4), for reference
-- Same as `Arg Compile` (compile.md): compiles the current file with the `extmake` command for its extension.
-- Table 6.1 p. 50: true = compile successful; false = bad argument/compiler not found.
+### meta
+No meta form. Ignored and cleared.
 
 ## Rejected arguments
-In M1 there is no `invalid argument` case: the dispatcher accepts every argument kind for this entry so that all invocations report `not available`. The flags under "Flags" take effect in the milestone that implements the command.
+Any argument → `invalid argument`.
 
 ## Open points
-None for M1.
+See compile.md (ORACLE COMPILE-2, COMPILE-3).
 
 ## Test checklist
-- `argcompile` → `not available`, false.
-- `arg argcompile` → `not available`, false.
-- `meta argcompile` → `not available`, meta cleared.
+- `argcompile` with `extmake:c cc %s` runs `cc /work/a.c`.
+- `argcompile` in `<untitled>` → `No file name`, false.
+- `arg argcompile` → `invalid argument`.

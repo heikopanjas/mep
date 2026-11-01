@@ -112,7 +112,8 @@ impl Editor
         let removed = file.text.delete(range.clone()).unwrap_or_default();
         file.text.insert(range.start, bytes).unwrap_or_default();
         file.modified = true;
-        let open = self.undo_file == Some(current);
+        // A command that edits several files (an extension) gets one group per file.
+        let open = self.undo_files.contains(&current);
         let undo = &mut self.state().undo;
         if open == false
         {
@@ -124,7 +125,10 @@ impl Editor
         }
         let excess = undo.len().saturating_sub(undocount);
         undo.drain(..excess);
-        self.undo_file = Some(current);
+        if open == false
+        {
+            self.undo_files.push(current);
+        }
     }
 
     /// Appends line breaks so that `line` exists (plan §5.4)

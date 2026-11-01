@@ -67,7 +67,15 @@ pub(crate) fn paste(ed: &mut Editor, arg: Arg) -> Step
 {
     match arg
     {
-        | Arg::Text { count, text, .. } if count >= 2 && text.starts_with('!') => ed.fail("paste !command: not available in this version"),
+        | Arg::Text { count, text, pos } if count >= 2 && text.starts_with('!') => match text[1..].trim()
+        {
+            | "" => ed.fail("Invalid argument"),
+            | command =>
+            {
+                let id = ed.start_run(command.to_string(), true);
+                Step::Wait(Pending::Request { id, then: Then::InsertOutput { pos } })
+            }
+        },
         | Arg::Text { count, text, pos } if count >= 2 =>
         {
             let name = FileName::parse(&text, &ed.env.cwd());
@@ -161,6 +169,22 @@ impl Editor
             }
         }
         self.set_cursor(pos);
+    }
+
+    /// Inserts the output of a `!` command at `pos`; the result is the command's success
+    pub(crate) fn insert_output(&mut self, pos: Pos, answer: Answer) -> Step
+    {
+        match answer
+        {
+            | Answer::Reply(Reply::Ran(Ok(ran))) =>
+            {
+                let clip = crate::commands::edit::stream_clip(&ran.output);
+                self.insert_clip(&clip, pos);
+                Step::Done(ran.success)
+            }
+            | Answer::Reply(Reply::Ran(Err(error))) => self.fail(&error.to_string()),
+            | _ => Step::Done(false)
+        }
     }
 
     /// Inserts a loaded file at `pos` for `arg arg name paste`

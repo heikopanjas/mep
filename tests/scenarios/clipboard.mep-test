@@ -242,11 +242,49 @@ arg arg "none.txt" paste
 arg arg "<x>" paste
 -- expect message <x>: cannot insert a pseudo-file
 
-== name: arg arg !command paste is not available
+== name: arg arg !command paste inserts the output at the cursor
+-- run echo hi
+hi
+-- file a.txt
+ab
+-- args a.txt
 -- keys
-arg arg "!ls" paste
--- expect message paste !command: not available in this version
+right arg arg "! echo hi" paste
+-- expect result true
+-- expect file a.txt
+ahi
+b
+-- expect log
+run: echo hi
+
+== name: a failing paste command inserts its output and returns false
+-- run fail false
+oops
+-- keys
+arg arg "!false" paste
 -- expect result false
+-- expect file <untitled>
+oops
+
+== name: a paste command that cannot start fails
+-- keys
+arg arg "!nope" paste
+-- expect message nope: not found
+-- expect result false
+
+== name: an empty paste command is rejected
+-- keys
+arg arg "! " paste
+-- expect message Invalid argument
+-- expect result false
+
+== name: esc stops waiting for a paste command and drops its output
+-- run echo hi
+hi
+-- keys
+hold arg arg "!echo hi" paste esc
+-- release
+-- expect file <untitled> noeol
 
 == name: paste rejects a selection
 -- file a.txt
@@ -282,3 +320,10 @@ outside
 arg "<clipboard>" setfile
 -- expect file <clipboard> noeol
 ~
+
+== name: a paste command answered with another reply inserts nothing
+-- keys
+hold arg arg "!echo hi" paste
+-- inject saved
+-- expect result false
+-- expect file <untitled> noeol

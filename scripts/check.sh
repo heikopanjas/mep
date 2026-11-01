@@ -22,7 +22,7 @@ cd "$(dirname "$0")/.."
 command -v jq >/dev/null || { echo "error: jq is required" >&2; exit 1; }
 
 # The only files excluded from coverage: OS glue without logic (§7).
-ignore='(mep-term[/\\]src[/\\]sys\.rs|mep-clip[/\\]src[/\\]system\.rs|mep[/\\]src[/\\]main\.rs)$'
+ignore='(mep-term[/\\]src[/\\]sys\.rs|mep-clip[/\\]src[/\\]system\.rs|mep[/\\]src[/\\]main\.rs|mep[/\\]src[/\\]sys\.rs)$'
 
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings

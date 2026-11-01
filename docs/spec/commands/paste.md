@@ -36,7 +36,7 @@ Treats the text as a file name and inserts the file's contents. The manual contr
 - `Arg Arg Paste` with a nullarg (NULLEOL) uses the rest of the line as the file name.
 
 ### `Arg Arg !textarg/!streamarg Paste`
-Runs the text as a command and inserts its standard output (p. 102). M4 (plan §6.7). M1: message `not available`, false, nothing changes.
+Runs the text after `!` as a command line through the system shell (as `shell` does) and inserts its standard output at the initial cursor position (p. 102), like a file insert (a stream; ORACLE S5). Standard error is discarded. The command runs in the background; the editor waits for it, and Esc stops waiting (the output is then dropped). True if the command exited successfully, false otherwise or if it could not be started (the output is inserted in both cases). An empty command after `!` → `invalid argument`.
 
 ### meta
 No meta form. Ignored and cleared.
@@ -48,7 +48,7 @@ linearg, boxarg (multi-line selections) → `invalid argument`, false.
 - File insert position: ORACLE S5 (at cursor, per plan).
 - Cursor after any paste: ORACLE CMD-PASTE-1.
 - Nullarg writes the clipboard: ORACLE CMD-PASTE-2.
-- Return value: Table 6.1 says paste always returns true. The plan (§0 rule 5) says every failure returns false with a message. Project decision: false for a rejected argument, for `not available`, and for a failed file read; true otherwise. ORACLE CMD-PASTE-3.
+- Return value: Table 6.1 says paste always returns true. The plan (§0 rule 5) says every failure returns false with a message. Project decision: false for a rejected argument, a failed file read and a failed `!` command; true otherwise. ORACLE CMD-PASTE-3.
 
 ## Test checklist
 - `ldelete` two lines, move to (0, 0), `paste` → lines above line 0 (p. 11 example), true.
@@ -65,7 +65,8 @@ linearg, boxarg (multi-line selections) → `invalid argument`, false.
 - Streamarg `arg right right paste` → text inserted at the anchor.
 - `arg arg "other.txt" paste` → file contents at the cursor (ORACLE S5).
 - `arg arg "missing.txt" paste` → message, false (ORACLE CMD-PASTE-3).
-- `arg arg "!ls" paste` → `not available`, false.
+- `arg arg "!echo hi" paste` at (0, 1) of `ab` → `ahi⏎b`, true.
+- `arg arg "!false" paste` → nothing inserted, false; `arg arg "!" paste` → `invalid argument`.
 - `arg down paste` → `invalid argument`.
 - Overtype mode → still inserts.
 - Clipboard read held (`hold`) → editor suspended, type-ahead queued; Esc cancels → false.

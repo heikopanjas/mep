@@ -14,7 +14,8 @@ pub mod sys;
 
 use std::{
     io::{self, Write},
-    sync::{Arc, Mutex, PoisonError, mpsc::Sender}
+    sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError, mpsc::Sender},
+    time::Duration
 };
 
 use crossterm::{
@@ -168,9 +169,69 @@ impl SharedOut
         Self(Arc::new(Mutex::new(out)))
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Box<dyn Write + Send>>
+    /// Takes the output for itself until the guard is dropped; frames wait meanwhile
+    pub fn lock(&self) -> MutexGuard<'_, Box<dyn Write + Send>>
     {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+/// Lets another thread stop the input thread from reading keys, so a child process gets them
+///
+/// The input thread calls [`InputGate::checkpoint`] between reads.
+#[derive(Debug, Default)]
+pub struct InputGate
+{
+    state:   Mutex<GateState>,
+    changed: Condvar
+}
+
+#[derive(Debug, Default)]
+struct GateState
+{
+    paused:  bool,
+    parked:  bool,
+    /// An input thread has reached a checkpoint; without one there is nothing to wait for
+    reading: bool
+}
+
+/// How long [`InputGate::pause`] waits for the input thread; a thread that ended never parks
+const PARK_TIMEOUT: Duration = Duration::from_secs(1);
+
+impl InputGate
+{
+    fn state(&self) -> MutexGuard<'_, GateState>
+    {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Stops the input thread at its next checkpoint and waits until it got there
+    pub fn pause(&self)
+    {
+        let mut state = self.state();
+        state.paused = true;
+        let _ = self.changed.wait_timeout_while(state, PARK_TIMEOUT, |state| state.reading == true && state.parked == false);
+    }
+
+    /// Lets the input thread read again
+    pub fn resume(&self)
+    {
+        self.state().paused = false;
+        self.changed.notify_all();
+    }
+
+    /// Called by the input thread before each read; waits while paused
+    pub fn checkpoint(&self)
+    {
+        let mut state = self.state();
+        state.reading = true;
+        while state.paused == true
+        {
+            state.parked = true;
+            self.changed.notify_all();
+            state = self.changed.wait(state).unwrap_or_else(PoisonError::into_inner);
+        }
+        state.parked = false;
     }
 }
 
@@ -434,6 +495,38 @@ mod tests
         {
             String::from_utf8(std::mem::take(&mut *self.0.lock().unwrap())).unwrap()
         }
+    }
+
+    #[test]
+    fn test_input_gate_parks_the_reader_until_resumed()
+    {
+        let gate = Arc::new(InputGate::default());
+        // Without a reader there is nothing to wait for.
+        gate.pause();
+        gate.resume();
+        gate.checkpoint();
+        let (reads, counted) = std::sync::mpsc::channel();
+        let reader = {
+            let gate = gate.clone();
+            std::thread::spawn(move || {
+                for _ in 0..2
+                {
+                    gate.checkpoint();
+                    reads.send(()).unwrap();
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+            })
+        };
+        counted.recv().unwrap();
+        gate.pause();
+        assert!(gate.state().parked);
+        assert!(counted.try_recv().is_err());
+        gate.resume();
+        counted.recv().unwrap();
+        reader.join().unwrap();
+        // A reader that ended never parks; the pause gives up after the timeout.
+        gate.pause();
+        gate.resume();
     }
 
     #[test]

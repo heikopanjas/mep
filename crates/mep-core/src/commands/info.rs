@@ -26,20 +26,28 @@ pub(crate) fn information(ed: &mut Editor, _: Arg) -> Step
     {
         text.push_str(&format!("{}\n", entry.path.display()));
     }
-    let id = match ed.files.find(&name)
-    {
-        | Some(id) => id,
-        | None => ed.files.add(File::new(name, ed.platform_crlf()))
-    };
-    let file = ed.file_at(id);
-    file.text = Text::from(text.into_bytes());
-    file.modified = false;
-    ed.state_of(id).undo.clear();
+    let id = ed.fill_pseudo("information", text.into_bytes());
     ed.switch(Switch::To(id))
 }
 
 impl Editor
 {
+    /// Replaces the contents of a pseudo-file, creating it if needed
+    pub(crate) fn fill_pseudo(&mut self, name: &str, bytes: Vec<u8>) -> FileId
+    {
+        let name = FileName::Pseudo(name.into());
+        let id = match self.files.find(&name)
+        {
+            | Some(id) => id,
+            | None => self.files.add(File::new(name, self.platform_crlf()))
+        };
+        let file = self.file_at(id);
+        file.text = Text::from(bytes);
+        file.modified = false;
+        self.state_of(id).undo.clear();
+        id
+    }
+
     /// Returns the information file: `<config dir>/<exe>.tmp`
     fn history_path(&self) -> Option<PathBuf>
     {

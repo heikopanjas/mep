@@ -7,14 +7,20 @@
 //! - `-- tools.ini`, `-- file NAME [crlf] [noeol] [readonly]`, `-- clipboard [record SHAPE | unavailable]`
 //! - `-- args NAME …`, `-- size COLS ROWS`, `-- env NAME=VALUE`, `-- os windows|macos|linux`
 //! - `-- slice N`, `-- notoolsini`, `-- temporary`, `-- execute TEXT` (a startup `-e` command)
+//! - `-- readkeys KEY…`: keys an extension reads with `ReadChar`/`ReadCmd` after the typed-ahead ones; `load:…/probe.so` loads the scripted `probe` extension, whose
+//!   text argument is a callback command (see `probe`)
+//! - `-- run [fail] COMMAND…`: the body is the output of the command line for `compile`, `paste` and `shell`; `fail` makes it exit unsuccessfully. Unknown command
+//!   lines cannot start in the background and succeed on the terminal.
 //!
 //! Sections that run in order:
 //! - `-- keys`: items in macro syntax; function names run functions, other names are keys, quoted strings are typed key by key, `key:NAME` sends a key whose name is
 //!   also a function, `hold` keeps the next requests pending, `tick` runs one slice
-//! - `-- release` serves the held requests; `-- inject saved|loaded|clipboard|ini` answers the first held request with that reply kind instead
+//! - `-- release` serves the held requests; `-- inject saved|loaded|clipboard|ini` answers the first held request or command with that reply kind instead
 //! - `-- fail read|write|rename|metadata|readdir|createdir PATH` (relative to `/work` or absolute), `-- resize COLS ROWS`
 //! - `-- expect file NAME [crlf] [noeol]`, `-- expect disk NAME …`, `-- expect cursor L C`, `-- expect window TOP LEFT`, `-- expect clipboard line|stream|box W`, `--
 //!   expect message [TEXT]`, `-- expect status`, `-- expect frame`, `-- expect result true|false`, `-- expect quit`, `-- expect waiting`, `-- expect current NAME`
+//! - `-- expect log` (the commands run so far, one per line: `run: …`, `shell: …`, `shell` for the interactive shell, `wait` for askrtn; clears the log), `-- expect
+//!   bell` (a bell rang since the last check)
 //!
 //! Bodies end every line with a line break unless `noeol` is given; `~` is an empty line and
 //! `\t`, `\f`, `\e`, `\b`, `\xff` stand for tab, form feed, escape, backspace and an invalid byte.
@@ -24,20 +30,281 @@
 #![allow(clippy::bool_comparison)]
 
 use std::{
-    fs,
-    path::{Path, PathBuf}
+    cell::RefCell,
+    collections::HashMap,
+    fs, io,
+    path::{Path, PathBuf},
+    rc::Rc
 };
 
 use mep_core::{
     Editor, Event, Startup,
     clip::{Clip, ClipboardPayload, MemClipboard, Shape},
     env::{FixedEnv, Os},
+    ext::{self, ExtApi, ExtArg, ExtFunction, ExtSwitch, Extension, SwitchKind, SwitchValue},
     file::FileName,
+    host::Host,
     io::{Completion, Reply, Request, serve},
     keys::{Key, KeyCode},
     macros::{self, Item},
-    memfs::{MemFs, Op}
+    memfs::{MemFs, Op},
+    run::{self, Ran, Runner}
 };
+
+/// The host: scripted command lines, the file system and clipboard, the `probe` extension and the log of what ran
+#[derive(Default)]
+struct Fake
+{
+    scripts: HashMap<String, (bool, Vec<u8>)>,
+    log:     RefCell<Vec<String>>,
+    fs:      MemFs,
+    clip:    RefCell<MemClipboard>,
+    keys:    RefCell<std::collections::VecDeque<Key>>
+}
+
+impl Fake
+{
+    fn note(&self, text: String)
+    {
+        self.log.borrow_mut().push(text);
+    }
+}
+
+/// Resolves a handle word of a probe command: `.` the current file, a number, or a file name
+fn handle(api: &mut dyn ExtApi, word: &str) -> usize
+{
+    match word
+    {
+        | "." => api.file_handle("", None),
+        | word => word.parse().unwrap_or_else(|_| api.file_handle(word, None))
+    }
+}
+
+/// Runs one probe command against the callbacks and returns what to log
+fn probe(api: &mut dyn ExtApi, command: &str) -> String
+{
+    let words: Vec<&str> = command.split_whitespace().collect();
+    let n = |index: usize| words[index].parse::<usize>().unwrap();
+    let rest = |index: usize| words[index..].join(" ");
+    match words[0]
+    {
+        | "add" => format!("{}", api.add_file(words[1])),
+        | "badarg" => format!("{}", api.bad_arg()),
+        | "copybox" =>
+        {
+            let (src, dst) = (handle(api, words[1]), handle(api, words[2]));
+            api.copy_box(src, dst, [n(3), n(4), n(5), n(6)], [n(7), n(8)]);
+            String::new()
+        }
+        | "copyline" =>
+        {
+            let (src, dst) = (handle(api, words[1]), handle(api, words[2]));
+            api.copy_line(src, dst, n(3), n(4), n(5));
+            String::new()
+        }
+        | "copystream" =>
+        {
+            let (src, dst) = (handle(api, words[1]), handle(api, words[2]));
+            api.copy_stream(src, dst, [n(3), n(4), n(5), n(6)], [n(7), n(8)]);
+            String::new()
+        }
+        | "delbox" =>
+        {
+            let file = handle(api, words[1]);
+            api.del_box(file, [n(2), n(3), n(4), n(5)]);
+            String::new()
+        }
+        | "delfile" =>
+        {
+            let file = handle(api, words[1]);
+            api.del_file(file);
+            String::new()
+        }
+        | "delline" =>
+        {
+            let file = handle(api, words[1]);
+            api.del_line(file, n(2), n(3));
+            String::new()
+        }
+        | "delstream" =>
+        {
+            let file = handle(api, words[1]);
+            api.del_stream(file, [n(2), n(3), n(4), n(5)]);
+            String::new()
+        }
+        | "msg" => format!("{}", api.message(&rest(1))),
+        | "display" =>
+        {
+            api.display();
+            String::new()
+        }
+        | "exec" => format!("{}", api.execute(&rest(1))),
+        | "length" =>
+        {
+            let file = handle(api, words[1]);
+            format!("{}", api.file_length(file))
+        }
+        | "handle" => format!("{}", api.file_handle(words[1], words.get(2).copied())),
+        | "read" =>
+        {
+            let file = handle(api, words[2]);
+            format!("{}", api.file_read(words[1], file))
+        }
+        | "write" =>
+        {
+            let file = handle(api, words[2]);
+            format!("{}", api.file_write(words[1], file))
+        }
+        | "cursor" => format!("{:?}", api.get_cursor()),
+        | "getline" =>
+        {
+            let file = handle(api, words[2]);
+            String::from_utf8_lossy(&api.get_line(n(1), file)).into_owned()
+        }
+        | "unhook" | "hook" =>
+        {
+            api.keyboard(words[0] == "hook");
+            String::new()
+        }
+        | "move" =>
+        {
+            api.move_cursor(n(1), n(2));
+            String::new()
+        }
+        | "top" =>
+        {
+            let file = handle(api, words[1]);
+            api.to_top(file);
+            String::new()
+        }
+        | "putline" =>
+        {
+            let file = handle(api, words[2]);
+            api.put_line(n(1), rest(3).as_bytes(), file);
+            String::new()
+        }
+        | "remove" =>
+        {
+            let file = handle(api, words[1]);
+            api.remove_file(file);
+            String::new()
+        }
+        | "char" => format!("{}", api.read_char()),
+        | "cmd" => format!("{:?}", api.read_command()),
+        | "replace" =>
+        {
+            let file = handle(api, words[4]);
+            format!("{}", api.replace_char(words[1].as_bytes()[0], n(2), n(3), file, words[5] == "insert"))
+        }
+        | "setkey" => format!("{}", api.set_key(words[1], words[2])),
+        | other => panic!("unknown probe command {other}")
+    }
+}
+
+impl Runner for Fake
+{
+    fn capture(&self, command: &str, _: &Path, _: bool) -> io::Result<Ran>
+    {
+        self.log.borrow_mut().push(format!("run: {command}"));
+        let (success, output) = self.scripts.get(command).cloned().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, format!("{command}: not found")))?;
+        Ok(Ran { success, output })
+    }
+}
+
+impl Host for Fake
+{
+    fn serve(&self, request: Request) -> Option<Completion>
+    {
+        // TOOLS.INI is served only in the background, to reach the path where a host cannot serve at once.
+        match request.kind
+        {
+            | mep_core::io::RequestKind::FindIni(_) => None,
+            | _ => Some(serve(request, &self.fs, &mut *self.clip.borrow_mut()))
+        }
+    }
+
+    fn run(&self, job: run::Run) -> Option<Completion>
+    {
+        Some(run::execute(job, self))
+    }
+
+    fn read_key(&self) -> Option<Key>
+    {
+        self.keys.borrow_mut().pop_front()
+    }
+
+    fn keyboard(&self, hooked: bool)
+    {
+        self.note(format!("keyboard {hooked}"));
+    }
+
+    fn load(&self, path: &Path) -> Result<Extension, String>
+    {
+        let switch = |name: &str, kind, id| ExtSwitch { name: name.into(), kind, id };
+        let function = |name: &str, flags, id| ExtFunction { name: name.into(), flags, id };
+        let all = ext::flags::ALL & !(ext::flags::CURSORFUNC | ext::flags::WINDOWFUNC | ext::flags::BOXSTR | ext::flags::NULLEOL | ext::flags::NULLEOW);
+        match path.file_name().and_then(|name| name.to_str())
+        {
+            | Some("probe.so") => Ok(Extension {
+                id:        7,
+                functions: vec![function("Probe", all, 0), function("psearch", ext::flags::NOARG, 1), function("probebox", ext::flags::BOXSTR, 2)],
+                switches:  vec![switch("probeflag", SwitchKind::Boolean, 0), switch("probenum", SwitchKind::Numeric, 1), switch("probetext", SwitchKind::Special, 2)]
+            }),
+            | _ => Err(format!("{}: no such library", path.display()))
+        }
+    }
+
+    fn init(&self, library: usize, api: &mut dyn ExtApi)
+    {
+        self.note(format!("init {library} {}", api.set_key("probe", "alt+p")));
+    }
+
+    fn call(&self, id: usize, arg: &ExtArg, key: u32, meta: bool, api: &mut dyn ExtApi) -> bool
+    {
+        let (text, result) = match arg
+        {
+            | ExtArg::Text { count: 1, text, .. } if id == 0 => (probe(api, text), text.starts_with("badarg") == false),
+            | arg => (format!("{id} {arg:?} key {key} meta {meta}"), true)
+        };
+        self.note(format!("probe: {text}").trim_end().to_string());
+        result
+    }
+
+    fn set_switch(&self, id: usize, value: &SwitchValue, _: &mut dyn ExtApi) -> bool
+    {
+        self.note(format!("switch {id} {value:?}"));
+        *value != SwitchValue::Special("bad".into())
+    }
+
+    fn shell(&self, commands: &[String], wait: bool) -> bool
+    {
+        let mut log = self.log.borrow_mut();
+        if commands.is_empty()
+        {
+            log.push("shell".into());
+        }
+        log.extend(commands.iter().map(|command| format!("shell: {command}")));
+        if wait == true
+        {
+            log.push("wait".into());
+        }
+        commands.iter().all(|command| self.scripts.get(command).is_none_or(|(success, _)| *success))
+    }
+}
+
+/// Work for the harness to serve: a worker request or a background command
+enum Work
+{
+    Request(Request),
+    Run(run::Run)
+}
+
+/// Collects an outcome's work in the order a front end would start it
+fn work(outcome: &mut mep_core::Outcome) -> Vec<Work>
+{
+    let requests = std::mem::take(&mut outcome.requests).into_iter().map(Work::Request);
+    requests.chain(std::mem::take(&mut outcome.runs).into_iter().map(Work::Run)).collect()
+}
 
 /// One section of a case: header words and body lines
 #[derive(Debug, Clone)]
@@ -127,63 +394,85 @@ fn body_bytes(body: &[String], flags: &[String]) -> Vec<u8>
 struct Run
 {
     editor: Editor,
-    fs:     MemFs,
-    clip:   MemClipboard,
-    held:   Vec<Request>,
+    fake:   Rc<Fake>,
+    held:   Vec<Work>,
     hold:   bool,
     paused: bool,
-    quit:   bool
+    quit:   bool,
+    bell:   bool
 }
 
 impl Run
 {
     /// Serves all requests until none are left, keeping one back when `hold` is set
-    fn settle(&mut self, mut requests: Vec<Request>, busy: bool)
+    fn settle(&mut self, mut outcome: mep_core::Outcome)
     {
-        let mut busy = busy;
+        let mut queue = work(&mut outcome);
+        let mut busy = outcome.busy;
+        self.quit |= outcome.quit;
+        self.bell |= outcome.bell;
         loop
         {
-            if self.hold == true && (requests.is_empty() == false || busy == true)
+            if self.hold == true && (queue.is_empty() == false || busy == true)
             {
-                self.held.append(&mut requests);
+                self.held.append(&mut queue);
                 self.paused = busy;
                 self.hold = false;
             }
-            if requests.is_empty() == false
+            let next = if queue.is_empty() == false
             {
-                let request = requests.remove(0);
-                let completion = serve(request, &self.fs, &mut self.clip);
-                let outcome = self.editor.handle(Event::Completed(completion));
-                self.quit |= outcome.quit;
-                busy = outcome.busy;
-                requests.extend(outcome.requests);
+                let completion = match queue.remove(0)
+                {
+                    | Work::Request(request) => serve(request, &self.fake.fs, &mut *self.fake.clip.borrow_mut()),
+                    | Work::Run(job) => run::execute(job, self.fake.as_ref())
+                };
+                Some(self.editor.handle(Event::Completed(completion)))
             }
             else if busy == true && self.paused == false
             {
-                let outcome = self.editor.tick();
-                self.quit |= outcome.quit;
-                busy = outcome.busy;
-                requests.extend(outcome.requests);
+                Some(self.editor.tick())
             }
             else
             {
+                None
+            };
+            let Some(mut outcome) = next
+            else
+            {
                 break;
+            };
+            self.quit |= outcome.quit;
+            self.bell |= outcome.bell;
+            busy = outcome.busy;
+            queue.extend(work(&mut outcome));
+        }
+    }
+
+    /// Serves held work as if it had been there all along
+    fn release(&mut self, held: Vec<Work>, busy: bool)
+    {
+        let mut outcome = mep_core::Outcome { busy, ..Default::default() };
+        for item in held
+        {
+            match item
+            {
+                | Work::Request(request) => outcome.requests.push(request),
+                | Work::Run(job) => outcome.runs.push(job)
             }
         }
+        self.settle(outcome);
     }
 
     fn event(&mut self, event: Event)
     {
         let outcome = self.editor.handle(event);
-        self.quit |= outcome.quit;
-        self.settle(outcome.requests, outcome.busy);
+        self.settle(outcome);
     }
 
     fn press(&mut self, name: &str)
     {
         let outcome = self.editor.press(name);
-        self.quit |= outcome.quit;
-        self.settle(outcome.requests, outcome.busy);
+        self.settle(outcome);
     }
 }
 
@@ -205,6 +494,7 @@ fn run_case(case: &Case) -> Vec<String>
     let mut clip = MemClipboard::default();
     let (mut cols, mut rows, mut args, mut slice) = (40u16, 8u16, Vec::new(), None);
     let (mut tools_ini, mut execute, mut temporary) = (true, Vec::new(), false);
+    let mut fake = Fake::default();
     for section in &case.sections
     {
         let head: Vec<&str> = section.head.iter().map(String::as_str).collect();
@@ -273,7 +563,18 @@ fn run_case(case: &Case) -> Vec<String>
             | ["slice", lines] => slice = lines.parse().ok(),
             | ["notoolsini"] => tools_ini = false,
             | ["temporary"] => temporary = true,
+            | ["run", words @ ..] =>
+            {
+                let (success, words) = match words
+                {
+                    | ["fail", rest @ ..] => (false, rest),
+                    | _ => (true, words)
+                };
+                let output = section.body.iter().map(|line| format!("{line}\n")).collect::<String>();
+                fake.scripts.insert(words.join(" "), (success, output.into_bytes()));
+            }
             | ["execute", words @ ..] => execute.push(words.join(" ")),
+            | ["readkeys", names @ ..] => fake.keys.borrow_mut().extend(names.iter().map(|name| Key::parse(name).expect("key name"))),
             | _ =>
             {}
         }
@@ -284,9 +585,13 @@ fn run_case(case: &Case) -> Vec<String>
     {
         editor.set_slice_lines(lines);
     }
+    fake.fs = fs;
+    fake.clip = RefCell::new(clip);
+    let fake = Rc::new(fake);
+    editor.set_host(fake.clone());
     let outcome = editor.start();
-    let mut run = Run { editor, fs, clip, held: Vec::new(), hold: false, paused: false, quit: outcome.quit };
-    run.settle(outcome.requests, outcome.busy);
+    let mut run = Run { editor, fake, held: Vec::new(), hold: false, paused: false, quit: false, bell: false };
+    run.settle(outcome);
     let mut failures = Vec::new();
     for section in &case.sections
     {
@@ -307,7 +612,7 @@ fn run_case(case: &Case) -> Vec<String>
                             | Item::Call(name) if name == "tick" =>
                             {
                                 let outcome = run.editor.tick();
-                                run.settle(outcome.requests, outcome.busy);
+                                run.settle(outcome);
                             }
                             | Item::Call(name) if name.starts_with("key:") => run.event(Event::Key(Key::parse(&name[4..]).expect("key name"))),
                             | Item::Call(name) if mep_core::is_function(&name) => run.press(&name),
@@ -335,7 +640,7 @@ fn run_case(case: &Case) -> Vec<String>
                 let got = match head[1]
                 {
                     | "file" => run.editor.buffer(&FileName::parse(name, Path::new("/work"))),
-                    | _ => run.fs.file(Path::new("/work").join(name))
+                    | _ => run.fake.fs.file(Path::new("/work").join(name))
                 };
                 if got.as_deref() != Some(want.as_slice())
                 {
@@ -442,14 +747,18 @@ fn run_case(case: &Case) -> Vec<String>
                     | "createdir" => Op::CreateDir,
                     | _ => Op::ReadDir
                 };
-                run.fs.fail(op, Path::new("/work").join(name));
-                run.fs.fail(op, Path::new(name));
+                run.fake.fs.fail(op, Path::new("/work").join(name));
+                run.fake.fs.fail(op, Path::new(name));
             }
             | ["resize", c, r] => run.event(Event::Resize(c.parse().unwrap(), r.parse().unwrap())),
             | ["close"] => run.event(Event::Close),
             | ["inject", kind] =>
             {
-                let request = run.held.remove(0);
+                let id = match run.held.remove(0)
+                {
+                    | Work::Request(request) => request.id,
+                    | Work::Run(job) => job.id
+                };
                 let reply = match *kind
                 {
                     | "saved" => Reply::Saved(Ok(())),
@@ -457,14 +766,29 @@ fn run_case(case: &Case) -> Vec<String>
                     | "clipboard" => Reply::ClipboardRead(None),
                     | _ => Reply::Ini(Ok(None))
                 };
-                run.event(Event::Completed(Completion { id: request.id, reply }));
+                run.event(Event::Completed(Completion { id, reply }));
             }
             | ["release"] =>
             {
                 let held = std::mem::take(&mut run.held);
                 let busy = run.paused;
                 run.paused = false;
-                run.settle(held, busy);
+                run.release(held, busy);
+            }
+            | ["expect", "log"] =>
+            {
+                let got = std::mem::take(&mut *run.fake.log.borrow_mut());
+                if got != section.body
+                {
+                    failures.push(fail("log", &section.body, &got));
+                }
+            }
+            | ["expect", "bell"] =>
+            {
+                if std::mem::take(&mut run.bell) == false
+                {
+                    failures.push(fail("bell", &true, &false));
+                }
             }
             | ["expect", ..] => failures.push(format!("{}: {}: unknown expectation {head:?}", case.file, case.name)),
             | _ =>

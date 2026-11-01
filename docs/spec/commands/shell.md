@@ -4,27 +4,44 @@ Default keys: Shift+F9
 Source: M guide p. 108 (Table A.3), p. 61 (`askrtn`), p. 89 (Table A.1), p. 52 (Table 6.1); MSJ (print macro, `DoSpawn`); IMPLEMENTATION_PLAN.md §6.7, §8 M4
 
 ## Flags
-For M4, from p. 108: NOARG, meta form, NULLARG (cursor to end of line as a command; NULLEOL), BOXARG and LINEARG (each line a separate command), TEXTARG and BOXSTR (one command).
+NOARG, NULLARG with NULLEOL, TEXTARG, BOXSTR, LINEARG, BOXARG, meta form. Not KEEPMETA.
+
+## Running commands
+- The editor leaves full-screen mode, runs the commands on the terminal with the terminal's input and output, then returns and redraws the whole screen. Keys typed while a command runs go to the command.
+- A command line runs through the system shell (`sh -c` on macOS and Linux, `cmd /C` on Windows) in the editor's working directory. The interactive shell is `$SHELL` (fallback `/bin/sh`) or `%COMSPEC%` (fallback `cmd.exe`).
+- With `askrtn` on (default), the editor shows `Press Enter to return to the editor` afterwards and waits for Enter (p. 61).
+- The editor waits for the commands; this keeps `arg "command" shell` usable inside macros and extensions (MSJ `DoSpawn`).
+- Returns true if every command started and exited successfully; false if one could not be started or failed (Table 6.1).
 
 ## Behavior
 
-### M1
-In M1 the command is in the command table so it can be assigned, used in macros and listed, but it does nothing: every invocation (any argument kind, with or without meta) shows `not available` on the dialog line and returns false (IMPLEMENTATION_PLAN.md §6.7). A pending argument and meta are consumed and cleared. The file, cursor and clipboard do not change.
+### noarg (`Shell`)
+Saves the current file if it is modified and has a name, then runs the interactive shell (p. 108). A failed save stops the command.
 
-### Later (M4), for reference
-- `Shell`: saves the current file and runs the command shell; `Meta Shell`: without saving (p. 108).
-- `Arg Shell`: the text from the cursor to the end of the line is a shell command.
-- `Arg boxarg/linearg Shell`: each line is a separate command.
-- `Arg textarg/streamarg Shell`: the text is the command (MSJ `arg "PRINT TEMP.DAT" shell`).
-- `askrtn` decides whether the editor waits for Enter afterwards (p. 61).
-- Table 6.1 p. 52: true = shell successful; false = bad argument/program not found.
+### meta (`Meta Shell`)
+Runs the interactive shell without saving (p. 108).
+
+### nullarg (`Arg Shell`)
+The text from the cursor to the end of the line is the command (p. 108).
+
+### textarg, one-line selection (`Arg textarg Shell`)
+The text is the command (MSJ `arg "PRINT TEMP.DAT" shell`).
+
+### linearg, boxarg
+Each line of the selection (for a box, its part of the line, trailing blanks removed) is a separate command, run in order (p. 108). Empty lines are skipped.
+
+Empty commands (an empty text, a selection of empty lines) → `invalid argument`, false.
 
 ## Rejected arguments
-In M1 there is no `invalid argument` case: the dispatcher accepts every argument kind for this entry so that all invocations report `not available`. The flags under "Flags" take effect in the milestone that implements the command.
+Stream over several lines → `invalid argument`.
 
 ## Open points
-- The MSJ print macro (plan §8 task 17) stubs `shell`; in M1 the real entry returns false.
+None.
 
 ## Test checklist
-- `shell`, `arg shell`, `arg "ls" shell`, `arg down shell` → `not available`, false, nothing run, file not saved.
-- `meta shell` → `not available`, meta cleared.
+- `shell` saves a modified file, then runs the interactive shell; `meta shell` does not save.
+- `arg shell` on `ls -l` at the cursor runs `ls -l`.
+- `arg "make" shell` runs `make`; failure exit → false.
+- Line and box selections run each line; empty lines skipped.
+- `noaskrtn:` → no wait for Enter.
+- A command inside a macro: the macro continues with the result.

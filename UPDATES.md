@@ -4,6 +4,18 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.12.0, m4 tools and extensions)
+
+- compile and argcompile run extmake commands or any command line in a background job thread; output goes to the compile pseudo-file, the bell rings, messages in the five manual forms plus file:row:column are browsed with compile, meta compile and arg meta compile up to maxmsg (oracle compile-1 to compile-4)
+- shell hands the terminal to the interactive shell or to command lines, waits for enter with askrtn, saves first without meta; the input thread pauses at a gate and the output is held so no frame is drawn meanwhile
+- arg arg !command paste inserts the standard output of a command at the cursor
+- c extensions: load switch, cmdTable, swiTable with boolean, numeric and special switches, WhenLoaded and all msj fig. 7 callbacks through our ext.h and exthdr.c with a MepCallbacks table (oracle ext-1 to ext-4); fExecute runs macros to the end and serves their io at once
+- new crate mep-ext holds all unsafe code for the c abi with libloading 0.9.0; the msj filter extension, compiled from c in the acceptance test, sorts lines through sort
+- added signal-hook 0.3.18 (unix) and windows-sys 0.61.2 (windows) with the owner's ok, so ctrl+c during a shell command does not end the editor; mep/src/sys.rs joins the coverage exclusions
+- undo groups are kept per file within one command, for extensions that edit several files
+- rationale: shell must own the terminal and extensions call back synchronously, so both run on the core thread through a host trait while compiles stay in the background
+- version bump: 0.11.0 to 0.12.0 (MINOR - compile, shell, command paste and c extensions)
+
 ### 2026-11-01 (v0.11.0, m3 clipboard checks postponed, 02:05)
 
 - the wayland, x11 and ssh osc 52 clipboard checks are postponed and listed under pending verification in agents.md

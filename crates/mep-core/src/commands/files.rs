@@ -292,6 +292,8 @@ impl Editor
         {
             | After::Switch(target) => self.switch_now(target),
             | After::Exit { advance } => self.exit_continue(advance),
+            | After::Compile(command) => self.start_compile(command),
+            | After::Shell => self.run_shell(&[]),
             | _ => Step::Done(true)
         }
     }
@@ -313,7 +315,7 @@ impl Editor
     }
 
     /// Discards a file and switches to the previous one or a new untitled buffer
-    fn discard(&mut self, file: FileId) -> Step
+    pub(crate) fn discard(&mut self, file: FileId) -> Step
     {
         let next = match self.previous
         {

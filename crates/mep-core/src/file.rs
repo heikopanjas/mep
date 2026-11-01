@@ -103,6 +103,21 @@ impl File
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(usize);
 
+impl FileId
+{
+    /// Returns the extension handle (`PFILE`) of the file: never 0
+    pub fn handle(self) -> usize
+    {
+        self.0 + 1
+    }
+
+    /// Returns the file of an extension handle; `None` for 0
+    pub fn from_handle(handle: usize) -> Option<Self>
+    {
+        handle.checked_sub(1).map(Self)
+    }
+}
+
 /// All open files
 #[derive(Debug, Default)]
 pub struct FileTable

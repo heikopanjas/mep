@@ -222,7 +222,7 @@ pub(crate) fn sinsert(ed: &mut Editor, arg: Arg) -> Step
 }
 
 /// Returns the byte range of whole lines `first..=last`, including the last line's terminator
-fn lines_range(ed: &Editor, first: usize, last: usize) -> std::ops::Range<usize>
+pub(crate) fn lines_range(ed: &Editor, first: usize, last: usize) -> std::ops::Range<usize>
 {
     let end = match last + 1 < ed.line_count()
     {
@@ -233,7 +233,7 @@ fn lines_range(ed: &Editor, first: usize, last: usize) -> std::ops::Range<usize>
 }
 
 /// Deletes box cells on lines `top..=bottom` and returns the rows padded to the box width
-fn delete_box(ed: &mut Editor, top: usize, bottom: usize, left: usize, right: usize) -> Vec<Vec<u8>>
+pub(crate) fn delete_box(ed: &mut Editor, top: usize, bottom: usize, left: usize, right: usize) -> Vec<Vec<u8>>
 {
     let mut rows = Vec::new();
     for line in top..=bottom
