@@ -19,11 +19,13 @@ use crate::{
     },
     env::{Env, Os},
     file::{File, FileId, FileName, FileTable},
+    history::Entry,
     io::{Completion, Reply, Request, RequestId, RequestKind},
     keys::{Key, KeyCode, Keymap},
     macros::{Item, Jump, Macros},
     switches::Switches,
-    view::{Pos, View}
+    view::{Pos, View},
+    window::{Layout, Rect, Tile}
 };
 
 /// Deepest macro nesting before a macro is aborted (plan §6.14)
@@ -75,7 +77,9 @@ pub struct Startup
     /// `-e` commands in order
     pub execute:   Vec<String>,
     /// Read TOOLS.INI (not `-d`)
-    pub tools_ini: bool
+    pub tools_ini: bool,
+    /// Do not write the information file (`-t`)
+    pub temporary: bool
 }
 
 /// Color class of the dialog line message
@@ -267,6 +271,13 @@ pub(crate) enum Then
     },
     /// Quit after confirmation
     Quit,
+    /// Keep the loaded information file
+    History,
+    /// Open the last edited file at startup
+    Reopen
+    {
+        name: FileName
+    },
     /// `replace` got its search string
     ReplaceFind
     {
@@ -345,7 +356,15 @@ pub(crate) struct Group
     pub(crate) edits:  Vec<Edit>
 }
 
-/// Per-file editor state
+/// A window: the file it shows and its own cursor and window position
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Window
+{
+    pub(crate) file: FileId,
+    pub(crate) view: View
+}
+
+/// Per-file editor state; `view` is the position the file had when it was last shown
 #[derive(Debug, Clone, Default)]
 pub(crate) struct FileState
 {
@@ -366,6 +385,7 @@ struct Frame
 enum Job
 {
     Ini,
+    History,
     Open(String),
     Execute(String)
 }
@@ -381,7 +401,12 @@ pub struct Editor
     pub(crate) current:      FileId,
     pub(crate) previous:     Option<FileId>,
     pub(crate) states:       HashMap<FileId, FileState>,
+    pub(crate) windows:      Vec<Window>,
+    pub(crate) layout:       Layout,
+    pub(crate) active:       usize,
     pub(crate) file_list:    Vec<String>,
+    pub(crate) history:      Vec<Entry>,
+    pub(crate) temporary:    bool,
     pub(crate) next_file:    usize,
     pub(crate) keymap:       Keymap,
     pub(crate) macros:       Macros,
@@ -398,7 +423,7 @@ pub struct Editor
     pub(crate) last_replace: String,
     pub(crate) marks:        HashMap<String, (FileName, Pos)>,
     pub(crate) jump_back:    Option<(FileId, View)>,
-    pub(crate) before:       Option<(FileId, View)>,
+    pub(crate) before:       Option<(usize, FileId, View)>,
     pub(crate) goto:         Option<Pos>,
     pub(crate) last_text:    Vec<char>,
     pub(crate) saved_cursor: Option<(FileId, Pos)>,
@@ -427,7 +452,8 @@ impl Editor
         let crlf = env.os() == Os::Windows;
         let mut files = FileTable::default();
         let current = files.add(File::new(FileName::Pseudo("untitled".into()), crlf));
-        let mut jobs = VecDeque::new();
+        // The information file comes first so TOOLS.INI errors stay on the dialog line.
+        let mut jobs = VecDeque::from([Job::History]);
         if startup.tools_ini == true
         {
             jobs.push_back(Job::Ini);
@@ -442,9 +468,14 @@ impl Editor
             files,
             current,
             previous: None,
+            windows: vec![Window { file: current, view: View::default() }],
+            layout: Layout::Leaf(0),
+            active: 0,
             states: HashMap::new(),
             next_file: 1,
             file_list: startup.files,
+            history: Vec::new(),
+            temporary: startup.temporary,
             keymap: Keymap::default(),
             macros: Macros::default(),
             switches: Switches::default(),
@@ -500,7 +531,7 @@ impl Editor
                 self.rows = rows;
             }
             | Event::Completed(completion) => self.completed(completion),
-            | Event::Close => self.quit = true
+            | Event::Close => self.leave()
         }
         self.pump()
     }
@@ -622,7 +653,7 @@ impl Editor
     /// Starts a new top-level command: new undo step, cleared message
     fn begin_command(&mut self, key: Option<Key>)
     {
-        self.before = Some((self.current, self.view()));
+        self.before = Some((self.active, self.current, self.view()));
         self.goto = None;
         self.undo_file = None;
         self.highlight = None;
@@ -640,6 +671,11 @@ impl Editor
             {
                 let tags = vec![self.exe.clone(), format!("{}-{}", self.exe, self.env.os().tag())];
                 let step = self.request_ini(tags, true);
+                self.run_step(step);
+            }
+            | Job::History =>
+            {
+                let step = self.load_history();
                 self.run_step(step);
             }
             | Job::Open(name) =>
@@ -735,6 +771,8 @@ impl Editor
             | Then::InsertFile { pos } => self.insert_loaded(pos, answer),
             | then @ (Then::ReplaceFind { .. } | Then::ReplaceWith { .. }) => self.replace_continue(then, answer),
             | Then::MarkFile { name } => self.mark_continue(&name, answer),
+            | Then::History => self.history_loaded(answer),
+            | Then::Reopen { name } => self.reopen(name, answer),
             | then => self.file_continue(then, answer)
         };
         self.run_step(step);
@@ -1094,13 +1132,62 @@ impl Editor
     /// Returns the state of the current file
     pub(crate) fn state(&mut self) -> &mut FileState
     {
-        self.states.entry(self.current).or_default()
+        self.state_of(self.current)
     }
 
-    /// Returns the view of the current file
+    /// Returns the state of a file
+    pub(crate) fn state_of(&mut self, id: FileId) -> &mut FileState
+    {
+        self.states.entry(id).or_default()
+    }
+
+    /// Returns the view of the current window
     pub(crate) fn view(&self) -> View
     {
-        self.states.get(&self.current).map(|state| state.view).unwrap_or_default()
+        self.windows[self.active].view
+    }
+
+    /// Returns the view of the current window for changing
+    pub(crate) fn view_mut(&mut self) -> &mut View
+    {
+        &mut self.windows[self.active].view
+    }
+
+    /// Returns the number of windows showing `file`
+    pub(crate) fn shown(&self, file: FileId) -> usize
+    {
+        self.windows.iter().filter(|window| window.file == file).count()
+    }
+
+    /// Makes window `index` current
+    pub(crate) fn activate(&mut self, index: usize)
+    {
+        self.active = index;
+        self.current = self.windows[index].file;
+    }
+
+    /// Returns the area of the text windows: the terminal without dialog and status lines, or `height`/`width`
+    pub(crate) fn text_area(&self) -> Rect
+    {
+        let rows = usize::from(self.rows).saturating_sub(2);
+        let cols = usize::from(self.cols);
+        let height = self.switches.height.map_or(rows, |height| height.min(rows));
+        let width = self.switches.width.map_or(cols, |width| width.min(cols));
+        Rect { top: 0, left: 0, height, width }
+    }
+
+    /// Returns the screen rectangle of every window, by window index
+    pub(crate) fn window_rects(&self) -> Vec<Rect>
+    {
+        let mut rects = vec![Rect::default(); self.windows.len()];
+        for tile in self.layout.tiles(self.text_area())
+        {
+            if let Tile::Window(index, rect) = tile
+            {
+                rects[index] = rect;
+            }
+        }
+        rects
     }
 
     /// Returns the cursor position
@@ -1112,30 +1199,32 @@ impl Editor
     /// Moves the cursor
     pub(crate) fn set_cursor(&mut self, pos: Pos)
     {
-        self.state().view.cursor = pos;
+        self.view_mut().cursor = pos;
     }
 
-    /// Returns the height of the text window
+    /// Returns the height of the current window
     pub(crate) fn height(&self) -> usize
     {
-        let terminal = usize::from(self.rows).saturating_sub(2);
-        self.switches.height.map_or(terminal, |height| height.min(terminal))
+        self.window_rects()[self.active].height
     }
 
-    /// Returns the width of the text window
+    /// Returns the width of the current window
     pub(crate) fn width(&self) -> usize
     {
-        let terminal = usize::from(self.cols);
-        self.switches.width.map_or(terminal, |width| width.min(terminal))
+        self.window_rects()[self.active].width
     }
 
-    /// Scrolls the window so the cursor is visible and remembers where a window jump came from (`arg mark`)
+    /// Scrolls every window so its cursor is visible and remembers where a window jump came from (`arg mark`)
     fn follow(&mut self)
     {
-        let (height, width, scroll) = (self.height(), self.width(), self.switches.scroll());
-        self.state().view.follow(height, width, scroll);
-        let (current, top) = (self.current, self.view().top);
-        if let Some((file, view)) = self.before.take() &&
+        let (scroll, rects) = (self.switches.scroll(), self.window_rects());
+        for (window, rect) in self.windows.iter_mut().zip(rects)
+        {
+            window.view.follow(rect.height, rect.width, scroll);
+        }
+        let (active, current, top) = (self.active, self.current, self.view().top);
+        if let Some((window, file, view)) = self.before.take() &&
+            window == active &&
             file == current &&
             view.top != top
         {
@@ -1294,7 +1383,8 @@ mod tests
             exe:       "mep".into(),
             files:     Vec::new(),
             execute:   execute.iter().map(|text| text.to_string()).collect(),
-            tools_ini: false
+            tools_ini: false,
+            temporary: false
         };
         let mut editor = Editor::new(Box::new(FixedEnv::default()), startup);
         editor.start();
@@ -1304,7 +1394,15 @@ mod tests
     #[test]
     fn test_startup_without_tools_ini_sends_no_request()
     {
-        let startup = Startup { cols: 40, rows: 8, exe: "mep".into(), files: Vec::new(), execute: Vec::new(), tools_ini: false };
+        let startup = Startup {
+            cols:      40,
+            rows:      8,
+            exe:       "mep".into(),
+            files:     Vec::new(),
+            execute:   Vec::new(),
+            tools_ini: false,
+            temporary: false
+        };
         let mut editor = Editor::new(Box::new(FixedEnv::default()), startup);
         assert!(editor.start().requests.is_empty());
     }

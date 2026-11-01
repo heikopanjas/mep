@@ -1,7 +1,7 @@
 //! Command table (IMPLEMENTATION_PLAN.md §6.5, §6.7; M guide p. 72; docs/spec/commands)
 
 use crate::{
-    commands::{clipboard, edit, files, marks, misc, movement, replace, search},
+    commands::{clipboard, edit, files, info, marks, misc, movement, replace, search, windows},
     editor::{Arg, Editor, Step}
 };
 
@@ -96,7 +96,7 @@ const TABLE: &[Desc] = &[
     Desc { name: "graphic", flags: NOARG | MODIFIES | TEXTEDIT, func: edit::graphic },
     Desc { name: "help", flags: RAW, func: misc::not_available },
     Desc { name: "home", flags: MOVE, func: movement::home },
-    Desc { name: "information", flags: RAW, func: misc::not_available },
+    Desc { name: "information", flags: NOARG, func: info::information },
     Desc { name: "initialize", flags: NOARG | NULLARG | NULLEOW | TEXTARG | BOXSTR, func: misc::initialize },
     Desc { name: "insertmode", flags: NOARG, func: edit::insertmode },
     Desc { name: "lasttext", flags: RAW | KEEPMETA, func: misc::lasttext },
@@ -134,7 +134,7 @@ const TABLE: &[Desc] = &[
     Desc { name: "unassigned", flags: RAW | KEEPMETA, func: misc::unassigned },
     Desc { name: "undo", flags: NOARG, func: edit::undo },
     Desc { name: "up", flags: MOVE, func: movement::up },
-    Desc { name: "window", flags: RAW, func: misc::not_available }
+    Desc { name: "window", flags: NOARG | NULLARG | WINDOWFUNC, func: windows::window }
 ];
 
 /// Returns the built-in function named `name` (lowercase)

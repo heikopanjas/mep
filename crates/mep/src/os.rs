@@ -59,6 +59,11 @@ impl Fs for OsFs
     {
         fs::read_dir(dir)?.map(|entry| entry.map(|entry| entry.file_name())).collect()
     }
+
+    fn create_dir_all(&self, dir: &Path) -> io::Result<()>
+    {
+        fs::create_dir_all(dir)
+    }
 }
 
 /// The operating system this binary was built for
@@ -260,5 +265,14 @@ mod tests
     {
         let dir = TempDir::new().unwrap();
         assert!(OsFs.read_dir_names(&dir.path().join("none")).is_err());
+    }
+
+    #[test]
+    fn test_create_dir_all_creates_parents()
+    {
+        let dir = TempDir::new().unwrap();
+        let nested = dir.path().join("a").join("b");
+        OsFs.create_dir_all(&nested).unwrap();
+        assert!(nested.is_dir());
     }
 }

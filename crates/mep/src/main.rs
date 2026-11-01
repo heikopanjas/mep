@@ -7,25 +7,23 @@ use std::{io, thread};
 use mep::{
     Platform,
     os::{OsEnv, OsFs},
-    run
+    run, select_clipboard
 };
-use mep_clip::{Adapter, system::ClipboardRs};
-use mep_core::clip::{MemClipboard, SystemClipboard};
-use mep_term::{Screen, forward_input, sys};
+use mep_clip::{Adapter, osc52::Osc52, system::ClipboardRs};
+use mep_core::clip::SystemClipboard;
+use mep_term::{Screen, SharedOut, forward_input, sys};
 
 fn main()
 {
-    let clipboard: Box<dyn SystemClipboard + Send> = match ClipboardRs::new()
-    {
-        | Some(system) => Box::new(Adapter::new(system)),
-        | None => Box::new(MemClipboard { content: None, unavailable: true })
-    };
+    let out = SharedOut::new(Box::new(io::stdout()));
+    let mut system = || ClipboardRs::new().map(|system| Box::new(Adapter::new(system)) as Box<dyn SystemClipboard + Send>);
+    let clipboard = select_clipboard(&OsEnv, &mut system, Box::new(Osc52::new(Box::new(out.clone()))));
     sys::install_panic_hook();
     let platform = Platform {
         env: Box::new(OsEnv),
         fs: Box::new(OsFs),
         clipboard,
-        screen: Screen::new(Box::new(io::stdout())),
+        screen: Screen::new(Box::new(out)),
         size: sys::size().unwrap_or((80, 25)),
         enter: Box::new(sys::enter),
         leave: Box::new(sys::leave)

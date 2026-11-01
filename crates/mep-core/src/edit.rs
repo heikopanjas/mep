@@ -16,6 +16,17 @@ use crate::{
     view::Pos
 };
 
+/// Returns the number of lines shown as `Length`: the empty line after a final break does not count
+pub(crate) fn text_length(text: &Text) -> usize
+{
+    let count = text.line_count();
+    match count > 1 && text.line(count - 1).is_empty()
+    {
+        | true => count - 1,
+        | false => count
+    }
+}
+
 impl Editor
 {
     /// Returns the number of lines in the current file's index
@@ -27,13 +38,7 @@ impl Editor
     /// Returns the length in lines shown on the status line: the empty line after a final line break does not count
     pub(crate) fn length(&self) -> usize
     {
-        let text = &self.file().text;
-        let count = text.line_count();
-        match count > 1 && text.line(count - 1).is_empty()
-        {
-            | true => count - 1,
-            | false => count
-        }
+        text_length(&self.file().text)
     }
 
     /// Returns the last line of the file, at least 0

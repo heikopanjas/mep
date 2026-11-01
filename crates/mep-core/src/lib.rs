@@ -31,6 +31,7 @@ pub mod env;
 pub mod file;
 pub mod frame;
 mod gap;
+pub mod history;
 pub mod ini;
 pub mod io;
 pub mod keys;
@@ -41,6 +42,7 @@ mod render;
 pub mod switches;
 mod text;
 pub mod view;
+pub mod window;
 
 pub use anyhow::Result;
 pub use cmd::is_function;

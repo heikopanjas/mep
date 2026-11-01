@@ -5,7 +5,8 @@ use crate::{
     editor::{Editor, MessageKind, Pending},
     file::FileName,
     frame::{CursorShape, Frame},
-    view::Pos
+    view::Pos,
+    window::{Rect, Tile}
 };
 
 /// Returns the file type shown on the status line, from the extension
@@ -88,12 +89,15 @@ impl Editor
         }
     }
 
-    /// Draws one file line into a window row
-    fn draw_line(&self, frame: &mut Frame, row: u16, line: usize)
+    /// Draws one file line into a row of window `index`; the selection shows only in the current window
+    fn draw_line(&self, frame: &mut Frame, index: usize, rect: Rect, row: usize, line: usize)
     {
-        let view = self.view();
-        let width = self.width();
-        let raw = self.file().text.line(line);
+        let window = self.windows[index];
+        let (view, width) = (window.view, rect.width);
+        let raw = self.files.get(window.file).expect("a window shows an open file").text.line(line);
+        let highlighted = |pos: Pos| index == self.active && self.highlighted(pos);
+        let x = |col: usize| (rect.left + col - view.left) as u16;
+        let y = (rect.top + row) as u16;
         let glyphs = cells::glyphs(&raw);
         let trailing = glyphs.iter().rposition(|glyph| glyph.kind != GlyphKind::Char(' ')).map_or(0, |last| last + 1);
         let show_trailing = self.switches.trailspace == true && self.switches.traildisp != 0;
@@ -119,7 +123,7 @@ impl Editor
                 let col = glyph.col + piece * piece_width;
                 if col >= view.left && col + piece_width <= view.left + width
                 {
-                    let attr = if self.highlighted(Pos::new(line, col))
+                    let attr = if highlighted(Pos::new(line, col))
                     {
                         self.switches.hgcolor
                     }
@@ -127,7 +131,7 @@ impl Editor
                     {
                         attr
                     };
-                    frame.put((col - view.left) as u16, row, &text, piece_width as u16, attr);
+                    frame.put(x(col), y, &text, piece_width as u16, attr);
                 }
             }
         }
@@ -135,25 +139,53 @@ impl Editor
         let end = glyphs.last().map_or(0, |glyph| glyph.col + glyph.width);
         for col in end.max(view.left)..view.left + width
         {
-            if self.highlighted(Pos::new(line, col))
+            if highlighted(Pos::new(line, col))
             {
-                frame.put((col - view.left) as u16, row, " ", 1, self.switches.hgcolor);
+                frame.put(x(col), y, " ", 1, self.switches.hgcolor);
+            }
+        }
+    }
+
+    /// Draws a separator line between windows
+    fn draw_separator(&self, frame: &mut Frame, rect: Rect, stacked: bool)
+    {
+        let line = match stacked
+        {
+            | true => "\u{2500}",
+            | false => "\u{2502}"
+        };
+        for row in rect.top..rect.top + rect.height
+        {
+            for col in rect.left..rect.left + rect.width
+            {
+                frame.put(col as u16, row as u16, line, 1, self.switches.stacolor);
             }
         }
     }
 
     /// Renders the screen
+    // ORACLE: WIN-1
     pub fn render(&self) -> Frame
     {
         let mut frame = Frame::new(self.cols, self.rows, self.switches.fgcolor);
-        let view = self.view();
-        let height = self.height();
-        for row in 0..height
+        for tile in self.layout.tiles(self.text_area())
         {
-            self.draw_line(&mut frame, row as u16, view.top + row);
+            match tile
+            {
+                | Tile::Window(index, rect) =>
+                {
+                    let top = self.windows[index].view.top;
+                    for row in 0..rect.height
+                    {
+                        self.draw_line(&mut frame, index, rect, row, top + row);
+                    }
+                }
+                | Tile::Separator(rect, stacked) => self.draw_separator(&mut frame, rect, stacked)
+            }
         }
+        let (view, rect) = (self.view(), self.window_rects()[self.active]);
+        let mut cursor = ((rect.left + view.cursor.col.saturating_sub(view.left)) as u16, (rect.top + view.cursor.line.saturating_sub(view.top)) as u16);
         let dialog = self.rows.saturating_sub(2);
-        let mut cursor = ((view.cursor.col.saturating_sub(view.left)) as u16, (view.cursor.line.saturating_sub(view.top)) as u16);
         match (&self.pending, self.arg.as_ref().and_then(|arg| arg.text.as_ref()))
         {
             | (Some(Pending::Confirm { prompt, .. }), _) =>

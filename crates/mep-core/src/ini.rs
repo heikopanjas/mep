@@ -27,14 +27,27 @@ pub fn search_dirs(env: &dyn Env) -> Vec<PathBuf>
         .var("INIT")
         .map(|list| list.to_string_lossy().split(os.list_separator()).filter(|dir| dir.is_empty() == false).map(PathBuf::from).collect())
         .unwrap_or_default();
-    let (config, home) = match os
+    let home = match os
     {
-        | Os::Windows => (var("APPDATA"), var("USERPROFILE")),
-        | _ => (var("XDG_CONFIG_HOME").or_else(|| var("HOME").map(|home| home.join(".config"))), var("HOME"))
+        | Os::Windows => var("USERPROFILE"),
+        | _ => var("HOME")
     };
-    dirs.extend(config.map(|dir| dir.join("mep")));
+    dirs.extend(config_dir(env));
     dirs.extend(home);
     dirs
+}
+
+/// Returns the editor's configuration directory: `%APPDATA%\mep` (Windows) or
+/// `$XDG_CONFIG_HOME/mep` / `~/.config/mep` (macOS, Linux)
+pub fn config_dir(env: &dyn Env) -> Option<PathBuf>
+{
+    let var = |name: &str| env.var(name).map(PathBuf::from);
+    let config = match env.os()
+    {
+        | Os::Windows => var("APPDATA"),
+        | _ => var("XDG_CONFIG_HOME").or_else(|| var("HOME").map(|home| home.join(".config")))
+    };
+    config.map(|dir| dir.join("mep"))
 }
 
 /// Returns `true` if `name` is a TOOLS.INI file name, ignoring case

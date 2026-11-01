@@ -4,6 +4,21 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.11.0, m3 clipboard checks postponed, 02:05)
+
+- the wayland, x11 and ssh osc 52 clipboard checks are postponed and listed under pending verification in agents.md
+- rationale: they need a linux desktop and a remote session, which are not available yet; m3 stays unaccepted until they pass
+
+### 2026-11-01 (v0.11.0, m3 windows and sessions, 01:52)
+
+- window: up to eight tiled windows with separators in stacolor; arg window splits at the cursor row, arg arg window at the cursor column, window cycles and meta window closes (oracle s10, win-1)
+- each window keeps its own file, cursor and window position; files remember their position when switched away; edits show in every window of a file
+- information file in the config directory as exe.tmp: written on quit and terminal close unless -t or tmpsav 0, reopens the last file when started without files, restores remembered positions (oracle info-1)
+- information command lists open and remembered files in the information pseudo-file
+- osc 52 clipboard in ssh sessions and when no desktop clipboard exists, sharing the terminal writer with the screen; clipboard-rs wayland feature on linux, wl-clipboard-rs held at 0.9.4 for the two week rule
+- rationale: osc 52 is the only way to reach the local clipboard from a remote shell; reads return what mep wrote, so paste uses the internal clipboard
+- version bump: 0.10.0 to 0.11.0 (MINOR - windows, sessions and clipboard adapters)
+
 ### 2026-11-01 (v0.10.0, m2 regex search, replace and marks)
 
 - arg arg psearch and msearch search regular expressions with the regex crate on bytes; single-arg searches go through the same engine with the text escaped; an invalid pattern keeps the previous search

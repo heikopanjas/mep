@@ -204,7 +204,7 @@ Numeric ranges: the manual gives no ranges. Unless a section says otherwise, a n
 ## tmpsav
 - Type: numeric. Default: 20 (M guide p. 60).
 - Values: 0–65535.
-- Effect (M3): number of files remembered between sessions in the information file (p. 60, p. 38). M1: accepted and stored, no effect.
+- Effect: number of files remembered between sessions in the information file (p. 60, p. 38); 0 keeps none. See information.md.
 - Tests: default 20; `tmpsav:5` stored; `tmpsav:x` → error, unchanged.
 
 ## markfile

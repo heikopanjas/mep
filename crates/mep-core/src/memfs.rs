@@ -26,7 +26,9 @@ pub enum Op
     /// [`Fs::metadata`]
     Metadata,
     /// [`Fs::read_dir_names`]
-    ReadDir
+    ReadDir,
+    /// [`Fs::create_dir_all`]
+    CreateDir
 }
 
 #[derive(Debug, Default)]
@@ -129,6 +131,11 @@ impl Fs for MemFs
         self.check(Op::ReadDir, dir)?;
         let state = self.state();
         Ok(state.files.keys().filter(|path| path.parent() == Some(dir)).filter_map(|path| path.file_name()).map(OsString::from).collect())
+    }
+
+    fn create_dir_all(&self, dir: &Path) -> io::Result<()>
+    {
+        self.check(Op::CreateDir, dir)
     }
 }
 

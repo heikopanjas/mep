@@ -5,7 +5,7 @@ use std::io::ErrorKind;
 use crate::{
     clip::Clip,
     edit::clip_text,
-    editor::{After, Answer, Arg, Editor, Pending, Step, Switch, Then},
+    editor::{After, Answer, Arg, Editor, Pending, Step, Switch, Then, Window},
     file::{File, FileId, FileName},
     io::{Reply, RequestKind},
     switches::Backup,
@@ -115,7 +115,8 @@ impl Editor
         }
         let file = self.file();
         // An untitled buffer that was never changed is empty and not worth keeping.
-        let scratch = file.name == FileName::Pseudo("untitled".into()) && file.modified == false;
+        let scratch = file.name == FileName::Pseudo("untitled".into()) && file.modified == false && self.shown(old) == 1;
+        self.state().view = self.view();
         if scratch == true
         {
             self.files.remove(old);
@@ -126,6 +127,8 @@ impl Editor
             self.previous = Some(old);
         }
         self.current = id;
+        self.windows[self.active].file = id;
+        *self.view_mut() = self.state().view;
         // A jump to a marker in another file lands on the marker.
         if let Some(pos) = self.goto.take()
         {
@@ -158,16 +161,17 @@ impl Editor
     }
 
     /// Returns `true` if new files use CRLF on this system
-    fn platform_crlf(&self) -> bool
+    pub(crate) fn platform_crlf(&self) -> bool
     {
         self.platform_newline() == "\r\n"
     }
 
     /// Adds a file and makes it current
-    fn install(&mut self, file: File) -> Step
+    pub(crate) fn install(&mut self, file: File) -> Step
     {
-        let readonly = file.readonly;
+        let (readonly, name) = (file.readonly, file.name.clone());
         let id = self.files.add(file);
+        self.remember(id, &name);
         self.make_current(id);
         if readonly == true
         {
@@ -217,7 +221,7 @@ impl Editor
             };
             return Step::Wait(Pending::Confirm { prompt, then: Then::Quit });
         }
-        self.quit = true;
+        self.leave();
         Step::Done(true)
     }
 
@@ -266,7 +270,7 @@ impl Editor
             | (Then::Discard { file }, Answer::Yes) => self.discard(file),
             | (Then::Quit, Answer::Yes) =>
             {
-                self.quit = true;
+                self.leave();
                 Step::Done(true)
             }
             | _ => Step::Done(false)
@@ -320,6 +324,11 @@ impl Editor
         self.states.remove(&file);
         self.current = next;
         self.previous = None;
+        let view = self.state().view;
+        for window in self.windows.iter_mut().filter(|window| window.file == file)
+        {
+            *window = Window { file: next, view };
+        }
         Step::Done(true)
     }
 

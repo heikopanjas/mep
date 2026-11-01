@@ -22,7 +22,7 @@ pub(crate) fn mark(ed: &mut Editor, arg: Arg) -> Step
         {
             | Some((file, view)) if file == ed.current =>
             {
-                ed.state().view = view;
+                *ed.view_mut() = view;
                 Step::Done(true)
             }
             | _ => Step::Done(false)

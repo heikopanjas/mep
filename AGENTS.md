@@ -1,6 +1,6 @@
 # Project Instructions for AI Coding Agents
 
-**Last updated:** 2026-10-31
+**Last updated:** 2026-11-01
 
 <!-- {preamble} -->
 
@@ -28,7 +28,7 @@ Non-goals for now: syntax highlighting, GUI, mouse support, Z editor behavior, t
 
 - **Language:** Rust, nightly toolchain pinned in `rust-toolchain.toml` (currently `nightly-2026-10-31`, with `clippy`, `llvm-tools-preview` and `rustfmt`), edition 2024. `.rustfmt.toml` needs nightly rustfmt. Move the pin only on purpose, in its own commit
 - **Coverage data after a toolchain change:** run `cargo llvm-cov clean` (without `--workspace`) once; stale data from another toolchain produces bogus coverage reports
-- **Framework:** none; terminal I/O through `crossterm`, system clipboard through `clipboard-rs`
+- **Framework:** none; terminal I/O through `crossterm`, system clipboard through `clipboard-rs` (with its `wayland` feature on Linux; `wl-clipboard-rs` is held at 0.9.4 because 0.9.5 is younger than two weeks), OSC 52 in SSH sessions and when no desktop clipboard exists
 - **Version Control:** Git
 - **Package Manager:** Cargo workspace (`crates/mep-core`, `crates/mep-term`, `crates/mep-clip`, `crates/mep`); `Cargo.lock` is committed
 - **Version manifest:** `[workspace.package] version` in the root `Cargo.toml`; all crates inherit it
@@ -134,7 +134,7 @@ When initializing a session or analyzing the workspace, refer to instruction fil
 - No `unreachable!()`, `todo!()` or `unimplemented!()` in non-test code; express invariants through types
 - Every error path is reached by a test through in-memory fakes (`Fs` with injectable failures, failing `SystemClipboard`, failing `impl Write`)
 - Tests assert behavior, not just execution
-- Scenario tests: format documented at the top of `crates/mep-core/tests/scenarios.rs`; `~` marks an empty body line, `key:NAME` forces a key event when NAME is also a function, `-- fail`, `-- inject`, `hold`/`-- release` reach I/O error and suspension paths
+- Scenario tests: format documented at the top of `crates/mep-core/tests/scenarios.rs`; `~` marks an empty body line, `key:NAME` forces a key event when NAME is also a function, `-- fail`, `-- inject`, `hold`/`-- release` reach I/O error and suspension paths; `-- env XDG_CONFIG_HOME=/cfg` enables the information file at `/cfg/mep/mep.tmp`, `-- temporary` stands for `-t`
 - Coverage across test binaries: unit tests and the scenario harness build separate copies of `mep-core`, and the gate takes each function's best copy. A function the scenarios call must be fully covered by scenarios; a fallback that scenarios cannot reach belongs in a separate function covered by unit tests
 - Avoid generic parameters (`impl Fn`, `W: Write`) on functions whose tests pass different types: each instantiation is measured on its own. Use `&mut dyn FnMut` or `Box<dyn Write>`
 - Testing framework: built-in `cargo test`, `proptest`, `tempfile`
@@ -178,6 +178,10 @@ Postponed by the owner on 2026-11-01; M1 is not accepted until these pass:
 
 - `scripts/check.sh` on Linux and `scripts/check.ps1` on Windows (never run so far)
 - The M1 manual checklist (`IMPLEMENTATION_PLAN.md` §8) on Windows Terminal, iTerm2, Ghostty and a Linux terminal; it passed on macOS through a pty
+
+Also postponed by the owner on 2026-11-01; M3 is not accepted until these pass:
+
+- Copy and paste on Wayland and X11 desktops, and OSC 52 copies over SSH reaching the local clipboard
 
 ## Recent Updates & Decisions
 

@@ -61,6 +61,13 @@ pub trait Fs
     ///
     /// Returns the operating system error.
     fn read_dir_names(&self, dir: &Path) -> io::Result<Vec<OsString>>;
+
+    /// Creates a directory and its missing parents
+    ///
+    /// # Errors
+    ///
+    /// Returns the operating system error.
+    fn create_dir_all(&self, dir: &Path) -> io::Result<()>;
 }
 
 /// Identifies a request so its completion can be matched
@@ -94,6 +101,14 @@ pub enum RequestKind
     },
     /// Find and read TOOLS.INI in the first of these directories that has one
     FindIni(Vec<PathBuf>),
+    /// Write the information file, creating its directory when needed
+    WriteInfo
+    {
+        /// The information file
+        path: PathBuf,
+        /// Complete new contents
+        data: Vec<u8>
+    },
     /// Read the system clipboard
     ClipboardRead,
     /// Write the system clipboard
@@ -116,7 +131,7 @@ pub enum Reply
 {
     /// Result of [`RequestKind::Load`]
     Loaded(io::Result<Loaded>),
-    /// Result of [`RequestKind::Save`]
+    /// Result of [`RequestKind::Save`] and [`RequestKind::WriteInfo`]
     Saved(io::Result<()>),
     /// Result of [`RequestKind::FindIni`]: the file and its text, `None` if there is none
     Ini(io::Result<Option<(PathBuf, String)>>),
@@ -144,6 +159,7 @@ pub fn serve(request: Request, fs: &dyn Fs, clipboard: &mut dyn SystemClipboard)
         | RequestKind::Load(path) => Reply::Loaded(load(fs, &path)),
         | RequestKind::Save { path, data, backup } => Reply::Saved(save(fs, &path, &data, backup)),
         | RequestKind::FindIni(dirs) => Reply::Ini(find_ini(fs, &dirs)),
+        | RequestKind::WriteInfo { path, data } => Reply::Saved(write_info(fs, &path, &data)),
         | RequestKind::ClipboardRead => Reply::ClipboardRead(clipboard.read()),
         | RequestKind::ClipboardWrite(payload) => Reply::ClipboardWritten(clipboard.write(&payload))
     };
@@ -164,6 +180,12 @@ fn find_ini(fs: &dyn Fs, dirs: &[PathBuf]) -> io::Result<Option<(PathBuf, String
         }
     }
     Ok(None)
+}
+
+fn write_info(fs: &dyn Fs, path: &Path, data: &[u8]) -> io::Result<()>
+{
+    fs.create_dir_all(path.parent().unwrap_or(Path::new("")))?;
+    fs.write_atomic(path, data)
 }
 
 fn load(fs: &dyn Fs, path: &Path) -> io::Result<Loaded>

@@ -6,13 +6,13 @@
 //! Setup sections:
 //! - `-- tools.ini`, `-- file NAME [crlf] [noeol] [readonly]`, `-- clipboard [record SHAPE | unavailable]`
 //! - `-- args NAME …`, `-- size COLS ROWS`, `-- env NAME=VALUE`, `-- os windows|macos|linux`
-//! - `-- slice N`, `-- notoolsini`, `-- execute TEXT` (a startup `-e` command)
+//! - `-- slice N`, `-- notoolsini`, `-- temporary`, `-- execute TEXT` (a startup `-e` command)
 //!
 //! Sections that run in order:
 //! - `-- keys`: items in macro syntax; function names run functions, other names are keys, quoted strings are typed key by key, `key:NAME` sends a key whose name is
 //!   also a function, `hold` keeps the next requests pending, `tick` runs one slice
 //! - `-- release` serves the held requests; `-- inject saved|loaded|clipboard|ini` answers the first held request with that reply kind instead
-//! - `-- fail read|write|rename|metadata|readdir PATH` (relative to `/work` or absolute), `-- resize COLS ROWS`
+//! - `-- fail read|write|rename|metadata|readdir|createdir PATH` (relative to `/work` or absolute), `-- resize COLS ROWS`
 //! - `-- expect file NAME [crlf] [noeol]`, `-- expect disk NAME …`, `-- expect cursor L C`, `-- expect window TOP LEFT`, `-- expect clipboard line|stream|box W`, `--
 //!   expect message [TEXT]`, `-- expect status`, `-- expect frame`, `-- expect result true|false`, `-- expect quit`, `-- expect waiting`, `-- expect current NAME`
 //!
@@ -204,7 +204,7 @@ fn run_case(case: &Case) -> Vec<String>
     let fs = MemFs::default();
     let mut clip = MemClipboard::default();
     let (mut cols, mut rows, mut args, mut slice) = (40u16, 8u16, Vec::new(), None);
-    let (mut tools_ini, mut execute) = (true, Vec::new());
+    let (mut tools_ini, mut execute, mut temporary) = (true, Vec::new(), false);
     for section in &case.sections
     {
         let head: Vec<&str> = section.head.iter().map(String::as_str).collect();
@@ -272,12 +272,13 @@ fn run_case(case: &Case) -> Vec<String>
             }
             | ["slice", lines] => slice = lines.parse().ok(),
             | ["notoolsini"] => tools_ini = false,
+            | ["temporary"] => temporary = true,
             | ["execute", words @ ..] => execute.push(words.join(" ")),
             | _ =>
             {}
         }
     }
-    let startup = Startup { cols, rows, exe: "mep".into(), files: args, execute, tools_ini };
+    let startup = Startup { cols, rows, exe: "mep".into(), files: args, execute, tools_ini, temporary };
     let mut editor = Editor::new(Box::new(env), startup);
     if let Some(lines) = slice
     {
@@ -438,6 +439,7 @@ fn run_case(case: &Case) -> Vec<String>
                     | "write" => Op::Write,
                     | "rename" => Op::Rename,
                     | "metadata" => Op::Metadata,
+                    | "createdir" => Op::CreateDir,
                     | _ => Op::ReadDir
                 };
                 run.fs.fail(op, Path::new("/work").join(name));

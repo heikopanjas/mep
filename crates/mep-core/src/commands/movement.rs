@@ -277,9 +277,9 @@ fn scroll(ed: &mut Editor, delta: isize) -> Step
     let view = ed.view();
     let top = view.top.saturating_add_signed(delta).min(ed.last_line().max(view.top));
     let moved = top as isize - view.top as isize;
-    let state = ed.state();
-    state.view.top = top;
-    state.view.cursor.line = view.cursor.line.saturating_add_signed(moved);
+    let window = ed.view_mut();
+    window.top = top;
+    window.cursor.line = view.cursor.line.saturating_add_signed(moved);
     Step::Done(moved != 0)
 }
 
@@ -304,7 +304,7 @@ pub(crate) fn plines(ed: &mut Editor, arg: Arg) -> Step
         {
             let cursor = ed.cursor();
             let moved = ed.view().top != cursor.line;
-            ed.state().view.top = cursor.line;
+            ed.view_mut().top = cursor.line;
             Step::Done(moved)
         }
         | Arg::Num { n, .. } => scroll(ed, n as isize),
@@ -323,7 +323,7 @@ pub(crate) fn mlines(ed: &mut Editor, arg: Arg) -> Step
             let cursor = ed.cursor();
             let top = (cursor.line + 1).saturating_sub(ed.height());
             let moved = ed.view().top != top;
-            ed.state().view.top = top;
+            ed.view_mut().top = top;
             Step::Done(moved)
         }
         | Arg::Num { n, .. } => scroll(ed, -(n as isize)),
@@ -354,10 +354,10 @@ pub(crate) fn mpage(ed: &mut Editor, arg: Arg) -> Step
     {
         // The window always shows the cursor, so with the cursor at the start it is already there.
         let moved = ed.cursor() != Pos::default();
-        let state = ed.state();
-        state.view.top = 0;
-        state.view.left = 0;
-        state.view.cursor = Pos::default();
+        let view = ed.view_mut();
+        view.top = 0;
+        view.left = 0;
+        view.cursor = Pos::default();
         return Step::Done(moved);
     }
     match amount(&arg)
@@ -430,9 +430,9 @@ pub(crate) fn setwindow(ed: &mut Editor, arg: Arg) -> Step
 {
     if let Arg::Null { pos, .. } = arg
     {
-        let state = ed.state();
-        state.view.top = pos.line;
-        state.view.left = pos.col;
+        let view = ed.view_mut();
+        view.top = pos.line;
+        view.left = pos.col;
     }
     ed.redraw = true;
     Step::Done(true)

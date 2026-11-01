@@ -14,7 +14,7 @@ pub mod sys;
 
 use std::{
     io::{self, Write},
-    sync::mpsc::Sender
+    sync::{Arc, Mutex, PoisonError, mpsc::Sender}
 };
 
 use crossterm::{
@@ -151,6 +151,45 @@ pub fn cursor_style(shape: CursorShape) -> SetCursorStyle
 fn emit(buffer: &mut Vec<u8>, command: impl Command)
 {
     let _ = queue!(buffer, command);
+}
+
+/// Terminal output shared by the render thread and the OSC 52 clipboard
+///
+/// Each `write_all` holds the lock for the whole buffer, so a frame and a
+/// clipboard sequence never mix.
+#[derive(Clone)]
+pub struct SharedOut(Arc<Mutex<Box<dyn Write + Send>>>);
+
+impl SharedOut
+{
+    /// Shares `out`
+    pub fn new(out: Box<dyn Write + Send>) -> Self
+    {
+        Self(Arc::new(Mutex::new(out)))
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Box<dyn Write + Send>>
+    {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+impl Write for SharedOut
+{
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize>
+    {
+        self.lock().write(buf)
+    }
+
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()>
+    {
+        self.lock().write_all(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()>
+    {
+        self.lock().flush()
+    }
 }
 
 /// Draws frames on a terminal, writing only the cells that changed
@@ -395,6 +434,18 @@ mod tests
         {
             String::from_utf8(std::mem::take(&mut *self.0.lock().unwrap())).unwrap()
         }
+    }
+
+    #[test]
+    fn test_shared_out_forwards_to_the_writer()
+    {
+        let inner = Shared::default();
+        let mut out = SharedOut::new(Box::new(inner.clone()));
+        let mut other = out.clone();
+        out.write_all(b"ab").unwrap();
+        assert_eq!(other.write(b"c").unwrap(), 1);
+        other.flush().unwrap();
+        assert_eq!(inner.take(), "abc");
     }
 
     #[test]

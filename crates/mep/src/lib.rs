@@ -55,6 +55,23 @@ pub struct Platform
     pub leave:     Box<dyn FnOnce() -> std::io::Result<()>>
 }
 
+/// Picks the system clipboard (plan §3.3)
+///
+/// Remote sessions (SSH) use OSC 52, so copies reach the clipboard of the
+/// machine the terminal runs on; elsewhere the desktop clipboard from `system`,
+/// and OSC 52 when there is none.
+pub fn select_clipboard(
+    env: &dyn Env, system: &mut dyn FnMut() -> Option<Box<dyn SystemClipboard + Send>>, osc52: Box<dyn SystemClipboard + Send>
+) -> Box<dyn SystemClipboard + Send>
+{
+    let remote = env.var("SSH_TTY").is_some() || env.var("SSH_CONNECTION").is_some();
+    match remote
+    {
+        | true => osc52,
+        | false => system().unwrap_or(osc52)
+    }
+}
+
 /// Serves requests until the editor closes the request channel (plan §3.5)
 fn work(requests: Receiver<Request>, events: Sender<Event>, fs: Box<dyn Fs + Send>, mut clipboard: Box<dyn SystemClipboard + Send>)
 {
@@ -110,7 +127,15 @@ pub fn run(args: Vec<OsString>, platform: Platform, input: Box<dyn FnOnce(Sender
         return 1;
     }
     let files = options.files.iter().map(|path| path.to_string_lossy().into_owned()).collect();
-    let startup = Startup { cols: platform.size.0, rows: platform.size.1, exe, files, execute: options.execute, tools_ini: options.no_tools_ini == false };
+    let startup = Startup {
+        cols: platform.size.0,
+        rows: platform.size.1,
+        exe,
+        files,
+        execute: options.execute,
+        tools_ini: options.no_tools_ini == false,
+        temporary: options.temporary
+    };
     let (events, incoming) = mpsc::channel();
     let (requests, worker_requests) = mpsc::channel();
     let (frames, render_frames) = mpsc::channel();
@@ -239,6 +264,28 @@ mod tests
         {
             self.0.read_dir_names(dir)
         }
+
+        fn create_dir_all(&self, dir: &std::path::Path) -> io::Result<()>
+        {
+            self.0.create_dir_all(dir)
+        }
+    }
+
+    #[test]
+    fn test_select_clipboard_prefers_osc52_in_remote_sessions()
+    {
+        let tagged = |text: &str| -> Box<dyn SystemClipboard + Send> {
+            Box::new(MemClipboard { content: Some(mep_core::clip::ClipboardPayload { text: text.into(), record: None }), unavailable: false })
+        };
+        let pick = |vars: &[(&str, &str)], system: bool| {
+            let env = FixedEnv { vars: vars.iter().map(|(name, value)| (name.to_string(), value.to_string())).collect(), ..FixedEnv::default() };
+            let mut system = || system.then(|| tagged("system"));
+            select_clipboard(&env, &mut system, tagged("osc52")).read().unwrap().text
+        };
+        assert_eq!(pick(&[], true), "system");
+        assert_eq!(pick(&[], false), "osc52");
+        assert_eq!(pick(&[("SSH_TTY", "/dev/pts/1")], true), "osc52");
+        assert_eq!(pick(&[("SSH_CONNECTION", "1 2 3 4")], true), "osc52");
     }
 
     fn platform(fs: MemFs, out: Box<dyn Write + Send>) -> Platform

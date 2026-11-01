@@ -343,8 +343,8 @@ arg compile
 -- expect message compile: not available in this version
 -- expect result false
 -- keys
-window
--- expect message window: not available in this version
+help
+-- expect message help: not available in this version
 
 == name: arg lasttext without text recalls the previous text
 -- keys

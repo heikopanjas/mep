@@ -1,11 +1,13 @@
 //! System clipboard adapter (IMPLEMENTATION_PLAN.md §3.3, §7)
 //!
 //! Copying writes the plain text and MEP's private shape record in one call;
-//! reading returns both. The calls into `clipboard-rs` live in `system.rs`.
+//! reading returns both. The calls into `clipboard-rs` live in `system.rs`;
+//! remote sessions use the terminal's OSC 52 sequence (`osc52.rs`).
 
 #![cfg_attr(test, feature(coverage_attribute))]
 #![allow(clippy::bool_comparison)]
 
+pub mod osc52;
 pub mod system;
 
 use clipboard_rs::common::ClipboardContent;

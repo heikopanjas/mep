@@ -1,0 +1,277 @@
+== name: arg window splits at the cursor row; the lower window becomes current
+-- size 12 14
+-- file a.txt
+l0
+l1
+l2
+l3
+l4
+l5
+l6
+l7
+l8
+l9
+-- args a.txt
+-- keys
+down down down down down down arg window
+-- expect result true
+-- expect cursor 6 0
+-- expect window 6 0
+-- expect frame
+l0
+l1
+l2
+l3
+l4
+l5
+────────────
+l6
+l7
+l8
+l9
+
+
+/work/a.txt
+-- keys
+window
+-- expect cursor 5 0
+-- expect window 0 0
+-- keys
+window
+-- expect cursor 6 0
+
+== name: a split too close to an edge or a ninth window fails
+-- size 40 14
+-- keys
+down down down down arg window
+-- expect message Window too small
+-- expect result false
+-- keys
+down down down arg window
+-- expect message Window too small
+-- keys
+right right right right right right right right right arg arg window
+-- expect message Window too small
+
+== name: at most eight windows
+-- size 200 14
+-- keys
+endline endline right right right right right right right right right right right right right right right right right right right right arg arg window
+endline right right right right right right right right right right right right right right right right right right right right arg arg window
+endline right right right right right right right right right right right right right right right right right right right right arg arg window
+endline right right right right right right right right right right right right right right right right right right right right arg arg window
+endline right right right right right right right right right right right right right right right right right right right right arg arg window
+endline right right right right right right right right right right right right right right right right right right right right arg arg window
+endline right right right right right right right right right right right right arg arg window
+-- expect result true
+-- keys
+right right right right right right right right right right right right arg arg window
+-- expect message Too many windows
+-- expect result false
+
+== name: arg arg window splits at the cursor column; the right window becomes current
+-- size 30 8
+-- file a.txt
+abcdefghijklmnopqrstuvwxyz0123
+-- args a.txt
+-- keys
+right right right right right right right right right right right right arg arg window
+-- expect cursor 0 12
+-- expect window 0 12
+-- expect frame
+abcdefghijkl│mnopqrstuvwxyz012
+            │
+            │
+            │
+            │
+            │
+
+/work/a.txt (text NL) Length=1
+-- keys
+window
+-- expect cursor 0 11
+
+== name: window with one window does nothing
+-- keys
+window
+-- expect result false
+-- keys
+meta window
+-- expect result false
+
+== name: meta window closes the current window and the neighbor takes its space
+-- size 20 14
+-- file a.txt
+l0
+l1
+l2
+l3
+l4
+l5
+l6
+-- args a.txt
+-- keys
+down down down down down down arg window meta window
+-- expect result true
+-- expect cursor 5 0
+-- expect frame
+l0
+l1
+l2
+l3
+l4
+l5
+l6
+
+
+
+
+
+
+/work/a.txt (text NL
+
+== name: closing the first window makes the next one current
+-- size 20 14
+-- file a.txt
+l0
+l1
+l2
+l3
+l4
+l5
+l6
+-- args a.txt
+-- keys
+down down down down down down arg window window meta window
+-- expect cursor 6 0
+-- expect window 6 0
+
+== name: an edit in one window shows in the other
+-- size 20 14
+-- file a.txt
+l0
+l1
+l2
+l3
+l4
+l5
+l6
+-- args a.txt
+-- keys
+down down down down down down arg window window arg mpage "x"
+-- expect frame
+x0
+l1
+l2
+l3
+l4
+l5
+────────────────────
+l6
+
+
+
+
+
+/work/a.txt (text mo
+
+== name: setfile in a window keeps the other and switching back restores the position
+-- size 20 14
+-- file a.txt
+l0
+l1
+l2
+l3
+l4
+l5
+l6
+-- file b.txt
+b
+-- args a.txt
+-- keys
+down down down down down down arg window arg "b.txt" setfile
+-- expect current b.txt
+-- keys
+window
+-- expect current a.txt
+-- expect cursor 5 0
+-- keys
+window arg "a.txt" setfile
+-- expect cursor 6 0
+-- expect window 6 0
+
+== name: arguments other than arg are rejected
+-- keys
+arg "x" window
+-- expect message Invalid argument
+-- expect result false
+
+== name: a resize shrinks the windows and keeps the cursors visible
+-- size 20 14
+-- file a.txt
+l0
+l1
+l2
+l3
+l4
+l5
+l6
+l7
+l8
+l9
+-- args a.txt
+-- keys
+down down down down down down arg window
+-- resize 20 9
+-- expect frame
+l4
+l5
+l6
+l7
+l8
+────────────────────
+l6
+
+/work/a.txt (text NL
+
+== name: closing a window inside a split and the first of three windows
+-- size 40 14
+-- file a.txt
+0123456789abcdefghijklmnopqrstuvwxyz
+1
+2
+3
+4
+5
+6
+-- args a.txt
+-- keys
+down down down down down down arg window
+right right right right right right right right right right right right arg arg window
+meta window
+-- expect cursor 6 11
+-- keys
+right arg arg window window meta window
+-- expect cursor 6 11
+-- expect window 6 0
+
+== name: closing the only window of a file remembers its position
+-- size 20 14
+-- file a.txt
+l0
+l1
+l2
+l3
+l4
+l5
+l6
+-- file b.txt
+b0
+b1
+-- args a.txt
+-- keys
+down down down down down down arg window arg "b.txt" setfile down meta window
+-- expect current a.txt
+-- keys
+arg "b.txt" setfile
+-- expect cursor 1 0
