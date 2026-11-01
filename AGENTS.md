@@ -182,7 +182,7 @@ Project overrides of the skill:
 
 Postponed by the owner on 2026-11-01; M1 is not accepted until these pass:
 
-- `scripts/check.sh` on Linux and `scripts/check.ps1` on Windows (never run so far)
+- `scripts/check.ps1` on Windows: all tests pass in CI since 2026-11-01; the coverage gate is confirmed once the runner and `shell` tests run there (`scripts/check.sh` passes on Linux in CI)
 - The M1 manual checklist (`IMPLEMENTATION_PLAN.md` §8) on Windows Terminal, iTerm2, Ghostty and a Linux terminal; it passed on macOS through a pty
 - macOS terminals type characters with Option unless told otherwise, so Alt keys (`arg` is Alt+A) need Option sent as Alt: Ghostty `macos-option-as-alt = left` (confirmed by the owner), iTerm2 "Left Option key: Esc+", Terminal.app "Use Option as Meta key"
 - The Command key reaches MEP as `cmd+` (TOOLS.INI `copy:cmd+c`) only in kitty-protocol terminals and only for combinations the terminal does not bind; in Ghostty free them with `keybind = cmd+c=unbind` etc.; not yet tried on a real terminal
@@ -193,7 +193,7 @@ Also postponed by the owner on 2026-11-01; M3 is not accepted until these pass:
 
 M4 checks still open:
 
-- The extension acceptance test (`crates/mep/tests/filter.rs`) and `shell`/`compile` on Linux and on Windows (clang and `cmd /C`); macOS passed
+- `shell`/`compile` by hand on Linux and on Windows (`cmd /C`); the extension acceptance test (`crates/mep/tests/filter.rs`) passed in CI on Linux and on Windows with clang, macOS passed
 - Ctrl+C during a `shell` command on Windows (`SetConsoleCtrlHandler`); macOS passed through a pty
 - Shift+F3 (`compile`) on terminals without the kitty keyboard protocol: crossterm reads the xterm sequence `CSI 1;2R` as a cursor position report and drops it
 

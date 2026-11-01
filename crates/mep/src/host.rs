@@ -230,18 +230,26 @@ mod tests
             quiet:       Box::new(|| Box::new(())),
             gate:        Arc::new(InputGate::default()),
             out:         SharedOut::new(Box::new(out.clone())),
-            os:          Os::Linux,
-            interactive: "true".into(),
+            os:          crate::os::OS,
+            // A program that exits at once, like an interactive shell given nothing to do.
+            interactive: if cfg!(windows)
+            {
+                "hostname"
+            }
+            else
+            {
+                "true"
+            }
+            .into(),
             cwd:         Utf8TypedPathBuf::from(std::env::temp_dir().to_string_lossy().as_ref()),
             fs:          Arc::new(MemFs::default().with_file("/a.txt", b"a")),
             clipboard:   Arc::new(Mutex::new(Box::new(MemClipboard::default()))),
-            runner:      Arc::new(OsRunner(Os::Linux)),
+            runner:      Arc::new(OsRunner(crate::os::OS)),
             inbox:       Rc::new(Inbox::new(events)),
             extensions:  Extensions::default()
         }
     }
 
-    #[cfg(unix)]
     #[test]
     fn test_shell_runs_commands_and_waits()
     {
@@ -249,10 +257,10 @@ mod tests
         let out = Shared::default();
         let (_events, incoming) = mpsc::channel();
         let host = host(&calls, &out, incoming);
-        assert!(host.shell(&["exit 0".into(), "true".into()], true));
+        assert!(host.shell(&["exit 0".into(), "exit 0".into()], true));
         assert_eq!(*calls.borrow(), ["suspend", "enter", "resume"]);
         assert_eq!(out.0.lock().unwrap().as_slice(), b"Press Enter to return to the editor");
-        assert!(host.shell(&["exit 1".into(), "true".into()], false) == false);
+        assert!(host.shell(&["exit 1".into(), "exit 0".into()], false) == false);
         assert!(host.shell(&[], false));
         let missing = TerminalHost { interactive: "/no/such/shell".into(), ..host };
         assert!(missing.shell(&[], false) == false);

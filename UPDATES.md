@@ -4,6 +4,13 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.15.1, process tests on every os)
+
+- the runner test in process.rs and the shell test in host.rs run on every os with the host's shell instead of only on unix; cmd gets its own command lines, crlf output and hostname as the interactive program
+- rationale: on windows these tests were skipped, so the coverage gate missed the runner and shell code there; the first full windows ci run passed every test and failed only this gate
+- ci status: check.sh passes on linux; on windows all tests pass, including the filter extension built with clang
+- no version bump: test code only
+
 ### 2026-11-01 (v0.15.1, typed paths in the core)
 
 - added typed-path 0.12.3 to mep-core, pinned because 0.12.4 and 0.13.0 are younger than two weeks; the owner approved it

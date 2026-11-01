@@ -76,13 +76,13 @@ impl Fs for OsFs
 
 /// The operating system this binary was built for
 #[cfg(windows)]
-const OS: Os = Os::Windows;
+pub(crate) const OS: Os = Os::Windows;
 /// The operating system this binary was built for
 #[cfg(target_os = "macos")]
-const OS: Os = Os::MacOs;
+pub(crate) const OS: Os = Os::MacOs;
 /// The operating system this binary was built for
 #[cfg(not(any(windows, target_os = "macos")))]
-const OS: Os = Os::Linux;
+pub(crate) const OS: Os = Os::Linux;
 
 /// The process environment and the system clock
 #[derive(Debug, Default, Clone, Copy)]

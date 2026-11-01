@@ -114,20 +114,25 @@ mod tests
         assert_eq!(interactive_shell(&env(Os::Windows, &[])), "cmd.exe");
     }
 
-    #[cfg(unix)]
     #[test]
     fn test_runner_captures_both_streams_in_order()
     {
+        // The same command lines for the host's shell: sh, or cmd with its redirection before the command.
+        let (both, out_only, newline) = match cfg!(windows)
+        {
+            | true => ("echo one&1>&2 echo two&cd", "echo out&1>&2 echo err&exit 3", "\r\n"),
+            | false => ("echo one; echo two >&2; pwd", "echo out; echo err >&2; exit 3", "\n")
+        };
         let dir = tempfile::TempDir::new().unwrap();
-        let runner = OsRunner(Os::Linux);
-        let cwd = Os::Linux.path(&dir.path().to_string_lossy());
+        let runner = OsRunner(crate::os::OS);
+        let cwd = crate::os::OS.path(&dir.path().to_string_lossy());
         let missing = cwd.join("missing");
-        let ran = runner.capture("echo one; echo two >&2; pwd", &cwd, false).unwrap();
+        let ran = runner.capture(both, &cwd, false).unwrap();
         let text = String::from_utf8(ran.output).unwrap();
         assert!(ran.success);
-        assert!(text.starts_with("one\ntwo\n"), "{text}");
-        let stdout = runner.capture("echo out; echo err >&2; exit 3", &cwd, true).unwrap();
-        assert_eq!((stdout.success, stdout.output.as_slice()), (false, b"out\n".as_slice()));
+        assert!(text.starts_with(&format!("one{newline}two{newline}")), "{text}");
+        let stdout = runner.capture(out_only, &cwd, true).unwrap();
+        assert_eq!((stdout.success, stdout.output), (false, format!("out{newline}").into_bytes()));
         assert!(runner.capture("true", &missing, false).is_err());
         assert!(runner.capture("true", &missing, true).is_err());
     }
