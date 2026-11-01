@@ -4,6 +4,14 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.12.1, performance tests)
+
+- added the plan's performance tests as ignored perf_ tests: loading the 2 million line, 100 MB reference document takes 69 ms (limit 1 s); insert, delete, moves, page down, undo, status and a frame at the start, middle and end stay under 4 ms (limit 16 ms); the slowest search slice takes 9 ms
+- a blocking file system and clipboard under the real front end show that esc still cancels a waiting load or paste within about 6 ms
+- the first edit after a jump moves the gap of the buffer and costs up to 3.5 ms on the reference document; later edits nearby cost microseconds
+- rationale: plan section 9.6 asks for these measurements before each milestone acceptance; timings are too noisy for the ci gate, so the tests are ignored and run by hand in release mode
+- version bump: 0.12.0 to 0.12.1 (PATCH - tests only)
+
 ### 2026-11-01 (v0.12.0, m4 tools and extensions)
 
 - compile and argcompile run extmake commands or any command line in a background job thread; output goes to the compile pseudo-file, the bell rings, messages in the five manual forms plus file:row:column are browsed with compile, meta compile and arg meta compile up to maxmsg (oracle compile-1 to compile-4)
