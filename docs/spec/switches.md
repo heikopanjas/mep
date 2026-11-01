@@ -210,7 +210,7 @@ Numeric ranges: the manual gives no ranges. Unless a section says otherwise, a n
 ## markfile
 - Type: text. Default: empty (M guide p. 63).
 - Values: a file name; empty clears it.
-- Effect (M2): file searched for markers not defined in memory, lines `markername filename line column` (p. 63). M1: accepted and stored, no effect.
+- Effect: file searched by `mark` and mark arguments for markers not defined in memory, lines `markername filename line column` (p. 63); see mark.md for the field rules (ORACLE MARK-2). The file is only read.
 - Tests: default empty; `markfile:marks.txt` stored; no invalid value for a free text switch, test that `markfile:` clears it.
 
 ## maxmsg

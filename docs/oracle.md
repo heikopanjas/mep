@@ -79,4 +79,9 @@ The command specs in `docs/spec/commands/` give the full manual text and reasoni
 | CMD-SETFILE-1 | Missing file on `setfile` (p. 13) | Ask to create it | `alt+a "new" f2` |
 | CMD-SETFILE-2 | `Arg Arg textarg Setfile` (p. 108) | Writes a copy; the buffer keeps its name and state | `alt+a alt+a "copy" f2`, check status |
 | CMD-UNASSIGNED-1 | Return value and message from a macro | False; uses the key that started the command | Macro calling `unassigned` |
+| S3 | `Arg numarg Mark`: "the first line of the file is line 0" (p. 31) vs the 1-based status line | Line numbers start at 0; `markfile` lines and columns too | `alt+a "0" ctrl+m`, `alt+a "5" ctrl+m`, compare with the status line |
+| S6 | `Arg markarg Replace`: "the box of text between the cursor position and the marker" (p. 34) | A mark argument to `replace`/`qreplace` is always a box; for `copy`, `ldelete` and others it is a stream, lines or a box by position | Define a marker, move down and right, `alt+a "m" ctrl+l` |
+| MARK-1 | `Arg Mark`: "location prior to the last scrolling operation" (p. 99) vs "previous cursor position" (p. 31) | Restores window and cursor before the last command that moved the window top; repeating toggles | `alt+a pgdn`, `alt+a ctrl+m` twice |
+| MARK-2 | `markfile` lines `markername filename line column` (p. 63); bases and paths not stated | Line and column 0-based; relative names relative to the markfile's directory; malformed lines ignored | A markfile with a relative name and line 0, then `alt+a "name" ctrl+m` |
+| RPL-1 | `Replace` prompts (p. 34) | Search prompt then replacement prompt, both prefilled, cursor at the start, editing with the text-argument keys; the cursor stays put; message `<n> replaced` | `ctrl+l`, edit both prompts, Enter |
 | CMD-UNDO-1 | `modified` after undoing to the saved state | Stays modified | Edit, save, edit, `alt+bksp`, check status |

@@ -76,14 +76,6 @@ psearch
 -- expect message No search string
 -- expect result false
 
-== name: regular expressions are not yet supported
--- keys
-arg arg "a+" psearch
--- expect message Regular expressions are not yet supported
--- keys
-arg "zz" psearch arg arg msearch
--- expect message Regular expressions are not yet supported
-
 == name: search beyond the line end starts on the next line
 -- file a.txt
 ab

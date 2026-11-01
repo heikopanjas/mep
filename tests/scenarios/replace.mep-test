@@ -1,0 +1,288 @@
+== name: replace from the cursor to the end of the file
+-- file a.txt
+cat cat
+cat
+-- args a.txt
+-- keys
+right replace "cat" enter "dog" enter
+-- expect file a.txt
+cat dog
+dog
+-- expect message 2 replaced
+-- expect result true
+-- expect cursor 0 1
+
+== name: arg replace is the same as replace
+-- file a.txt
+aa
+-- args a.txt
+-- keys
+arg replace "a" enter "b" enter
+-- expect file a.txt
+bb
+
+== name: linearg and numarg replace whole lines
+-- file a.txt
+x
+x
+x
+-- args a.txt
+-- keys
+down arg down replace "x" enter "y" enter
+-- expect file a.txt
+x
+y
+y
+-- keys
+arg mpage arg "1" replace enter "z" enter
+-- expect file a.txt
+z
+y
+y
+
+== name: streamarg replace stays within the stream
+-- file a.txt
+aaaa
+aaaa
+-- args a.txt
+-- keys
+right arg right right replace "a" enter "b" enter
+-- expect file a.txt
+abba
+aaaa
+
+== name: boxarg replace stays within the box
+-- file a.txt
+aaaa
+aaaa
+aaaa
+-- args a.txt
+-- keys
+right arg down down right right replace "a" enter "b" enter
+-- expect file a.txt
+abba
+abba
+abba
+
+== name: a mark argument replaces in the box between marker and cursor
+-- file a.txt
+aaaa
+aaaa
+-- args a.txt
+-- keys
+right arg arg "m" mark down right right arg "m" replace "a" enter "b" enter
+-- expect file a.txt
+abba
+abba
+
+== name: regular expression replace with groups
+-- file a.txt
+key=value
+-- args a.txt
+-- keys
+arg arg replace "(\w+)=(\w+)" enter "$2=$1" enter
+-- expect file a.txt
+value=key
+
+== name: literal replace treats special characters literally
+-- file a.txt
+a.c abc $1
+-- args a.txt
+-- keys
+replace "a.c" enter "$1" enter
+-- expect file a.txt
+$1 abc $1
+
+== name: case switch applies to replace
+-- file a.txt
+A a
+-- args a.txt
+-- keys
+replace "a" enter "x" enter
+-- expect file a.txt
+x x
+-- keys
+arg "case:" assign arg mpage replace "X" enter "y" enter
+-- expect result false
+-- expect message X not found
+
+== name: prompts are prefilled with the previous strings
+-- file a.txt
+ab ab
+-- args a.txt
+-- keys
+replace "a" enter "c" enter undo replace enter enter
+-- expect file a.txt
+cb cb
+
+== name: prompt editing keys
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+insertmode replace "xbz" f5 key:home del "a" key:end bksp "c" key:left key:right enter "q" enter
+-- expect file a.txt
+q
+
+== name: the arg key clears the prompt to its end
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+replace "zzz" key:home alt+a "b" enter "B" enter
+-- expect file a.txt
+aBc
+
+== name: esc at either prompt cancels
+-- file a.txt
+a
+-- args a.txt
+-- keys
+replace esc
+-- expect result false
+-- keys
+replace "a" enter esc
+-- expect result false
+-- expect file a.txt
+a
+
+== name: an empty search string fails
+-- keys
+replace enter
+-- expect message Empty search string
+-- expect result false
+
+== name: an invalid pattern fails
+-- keys
+arg arg replace "(x" enter "y" enter
+-- expect message error: unclosed group
+
+== name: empty matches are skipped
+-- file a.txt
+ab
+-- args a.txt
+-- keys
+arg arg replace "x*" enter "y" enter
+-- expect result false
+-- expect file a.txt
+ab
+
+== name: undo reverses the whole replace
+-- file a.txt
+aa
+aa
+-- args a.txt
+-- keys
+replace "a" enter "b" enter undo
+-- expect file a.txt
+aa
+aa
+
+== name: replace runs in slices and esc stops it
+-- slice 1
+-- file a.txt
+a
+a
+a
+-- args a.txt
+-- keys
+hold replace "a" enter "b" enter
+-- expect waiting
+-- keys
+esc
+-- expect result false
+-- expect file a.txt
+b
+a
+a
+
+== name: a sliced replace finishes
+-- slice 1
+-- file a.txt
+a
+a
+-- args a.txt
+-- keys
+replace "a" enter "b" enter
+-- expect file a.txt
+b
+b
+
+== name: replace in a line with tabs
+-- file a.txt
+\ta
+-- args a.txt
+-- keys
+replace "a" enter "b" enter
+-- expect file a.txt
+        b
+
+== name: replace rejects a text argument
+-- keys
+arg "x" replace
+-- expect message Invalid argument
+
+== name: qreplace asks at every match
+-- file a.txt
+a a a a
+-- args a.txt
+-- keys
+qreplace "a" enter "b" enter
+-- expect waiting
+-- expect cursor 0 0
+-- keys
+"y"
+-- expect cursor 0 2
+-- keys
+"n" "q" "p"
+-- expect file a.txt
+b a b b
+-- expect message 3 replaced
+-- expect result true
+
+== name: esc during qreplace keeps earlier replacements
+-- file a.txt
+a a
+-- args a.txt
+-- keys
+qreplace "a" enter "b" enter "y" esc
+-- expect file a.txt
+b a
+-- expect result true
+
+== name: qreplace with every match declined
+-- file a.txt
+a
+-- args a.txt
+-- keys
+qreplace "a" enter "b" enter "n"
+-- expect message 0 replaced
+-- expect result false
+
+== name: qreplace shows its question
+-- size 40 4
+-- file a.txt
+a
+-- args a.txt
+-- keys
+qreplace "a" enter "b" enter
+-- expect frame
+a
+
+Replace? (y/n/p)
+/work/a.txt (text NL) Length=1  Window=(
+
+== name: replace prompts are drawn on the dialog line
+-- size 40 4
+-- keys
+replace "ab"
+-- expect frame
+
+
+Search: ab
+<untitled> (text NL) Length=1  Window=(1
+
+== name: qreplace rejects a text argument
+-- keys
+arg "x" qreplace
+-- expect message Invalid argument

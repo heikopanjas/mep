@@ -4,6 +4,17 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.10.0, m2 regex search, replace and marks)
+
+- arg arg psearch and msearch search regular expressions with the regex crate on bytes; single-arg searches go through the same engine with the text escaped; an invalid pattern keeps the previous search
+- replace and qreplace with prefilled editable prompts, ranges from the cursor, lines, numbers, streams, boxes and markers (always a box, oracle s6), literal or regex replacement with $1 and named groups, slices with esc, one undo step, and y, n, p and esc answers for qreplace
+- mark: start of file, 0-based line numbers (oracle s3), define and go to markers with case-insensitive names across files, markfile lookup (read only), and arg mark returning to the position before the last window jump
+- marker arguments for copy, ldelete, linsert, sdelete and sinsert become a selection from the marker to the cursor
+- dialog line prompts are now editable text with a cursor; the read-only save-as prompt uses them too
+- specs for mark, replace and qreplace written; psearch, msearch and markfile specs updated; oracle items S3, S6, MARK-1, MARK-2 and RPL-1 recorded
+- added regex 1.13.1
+- version bump: 0.9.0 to 0.10.0 (MINOR - regex search, replace and marks)
+
 ### 2026-11-01 (v0.9.0, modern regex syntax instead of mep dialect)
 
 - m2 uses the regex crate and its syntax for arg arg searches and replacements; mep's original dialect from chapter 5 of the m guide is dropped

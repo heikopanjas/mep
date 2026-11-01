@@ -1,0 +1,83 @@
+== name: arg arg psearch searches a regular expression
+-- file a.txt
+foo1 bar
+x foo22
+-- args a.txt
+-- keys
+arg arg "fo+[0-9]{2}" psearch
+-- expect cursor 1 2
+-- expect result true
+-- keys
+arg mpage psearch
+-- expect cursor 1 2
+
+== name: arg arg msearch searches backward
+-- file a.txt
+a1 a2
+a3
+-- args a.txt
+-- keys
+down endline arg arg "a\d" msearch
+-- expect cursor 1 0
+-- keys
+msearch
+-- expect cursor 0 3
+
+== name: a single arg searches literal text
+-- file a.txt
+a.c abc
+-- args a.txt
+-- keys
+right arg "a.c" psearch
+-- expect result false
+-- expect message a.c not found
+-- keys
+arg arg "a.c" psearch
+-- expect cursor 0 4
+
+== name: regex search follows the case switch
+-- file a.txt
+x ABC
+-- args a.txt
+-- keys
+arg arg "a.c" psearch
+-- expect cursor 0 2
+-- keys
+arg "case:" assign arg mpage arg arg "a.c" psearch
+-- expect result false
+
+== name: an invalid pattern keeps the previous search
+-- file a.txt
+ab ab
+-- args a.txt
+-- keys
+arg "ab" psearch arg arg "(a" psearch
+-- expect message error: unclosed group
+-- expect result false
+-- keys
+psearch
+-- expect cursor 0 3
+
+== name: arg arg nullarg searches the word at the anchor as a pattern
+-- file a.txt
+a.b xyz a_b
+-- args a.txt
+-- keys
+arg arg psearch
+-- expect cursor 0 8
+
+== name: regex search on a line with invalid bytes
+-- file a.txt
+\xff abc
+-- args a.txt
+-- keys
+arg arg "b." psearch
+-- expect cursor 0 3
+
+== name: an empty match moves the cursor by one character
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+arg arg "x*" psearch
+-- expect cursor 0 1

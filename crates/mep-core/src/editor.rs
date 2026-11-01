@@ -13,7 +13,10 @@ use std::{
 use crate::{
     clip::{Clip, ClipboardPayload, Shape},
     cmd::{self, Desc, flags},
-    commands::search::Search,
+    commands::{
+        replace::{Replace, Span},
+        search::Search
+    },
     env::{Env, Os},
     file::{File, FileId, FileName, FileTable},
     io::{Completion, Reply, Request, RequestId, RequestKind},
@@ -140,6 +143,16 @@ impl Arg
         }
     }
 
+    /// Returns the position of a null or text argument (the anchor); the start of the file otherwise
+    pub(crate) fn anchor(&self) -> Pos
+    {
+        match self
+        {
+            | Self::Null { pos, .. } | Self::Text { pos, .. } => *pos,
+            | _ => Pos::default()
+        }
+    }
+
     /// Returns the text of a text argument; empty for other kinds
     pub(crate) fn into_text(self) -> String
     {
@@ -175,15 +188,19 @@ pub(crate) enum Pending
     {
         prompt: String, then: Then
     },
-    /// A file name typed on the dialog line
-    Name
+    /// Text typed and edited on the dialog line
+    Prompt
     {
-        prompt: String, text: String, then: Then
+        prompt: String, edit: TextArg, then: Then
     },
     /// The next key, taken literally (`quote`)
     Quote,
     /// A search between slices
-    Search(Search)
+    Search(Box<Search>),
+    /// A replace between slices
+    Replace(Box<Replace>),
+    /// `qreplace` asks about the match it found
+    Query(Box<Replace>)
 }
 
 /// Answer that resumes a suspended command
@@ -249,7 +266,22 @@ pub(crate) enum Then
         file: FileId
     },
     /// Quit after confirmation
-    Quit
+    Quit,
+    /// `replace` got its search string
+    ReplaceFind
+    {
+        span: Span, regex: bool, query: bool
+    },
+    /// `replace` got its replacement string
+    ReplaceWith
+    {
+        span: Span, regex: bool, query: bool, find: String
+    },
+    /// Look up a marker in `markfile`
+    MarkFile
+    {
+        name: String
+    }
 }
 
 /// What follows a successful save
@@ -361,7 +393,13 @@ pub struct Editor
     pub(crate) clip:         Clip,
     pub(crate) written:      Option<ClipboardPayload>,
     pub(crate) clip_warned:  bool,
-    pub(crate) search:       Option<String>,
+    pub(crate) search:       Option<(String, bool)>,
+    pub(crate) last_find:    String,
+    pub(crate) last_replace: String,
+    pub(crate) marks:        HashMap<String, (FileName, Pos)>,
+    pub(crate) jump_back:    Option<(FileId, View)>,
+    pub(crate) before:       Option<(FileId, View)>,
+    pub(crate) goto:         Option<Pos>,
     pub(crate) last_text:    Vec<char>,
     pub(crate) saved_cursor: Option<(FileId, Pos)>,
     pub(crate) result:       bool,
@@ -418,6 +456,12 @@ impl Editor
             written: None,
             clip_warned: false,
             search: None,
+            last_find: String::new(),
+            last_replace: String::new(),
+            marks: HashMap::new(),
+            jump_back: None,
+            before: None,
+            goto: None,
             last_text: Vec::new(),
             saved_cursor: None,
             result: true,
@@ -520,11 +564,17 @@ impl Editor
     /// Continues a long operation by one slice (plan §3.5)
     pub fn tick(&mut self) -> Outcome
     {
-        if let Some(Pending::Search(search)) = self.pending.take()
+        let step = match self.pending.take()
         {
-            let step = self.search_step(search);
-            self.run_step(step);
-        }
+            | Some(Pending::Search(search)) => self.search_step(*search),
+            | Some(Pending::Replace(replace)) => self.replace_step(*replace),
+            | pending =>
+            {
+                self.pending = pending;
+                return self.pump();
+            }
+        };
+        self.run_step(step);
         self.pump()
     }
 
@@ -565,13 +615,15 @@ impl Editor
             }
         }
         self.follow();
-        let busy = matches!(self.pending, Some(Pending::Search(_)));
+        let busy = matches!(self.pending, Some(Pending::Search(_) | Pending::Replace(_)));
         Outcome { quit: self.quit, requests: std::mem::take(&mut self.requests), redraw: std::mem::take(&mut self.redraw), busy }
     }
 
     /// Starts a new top-level command: new undo step, cleared message
     fn begin_command(&mut self, key: Option<Key>)
     {
+        self.before = Some((self.current, self.view()));
+        self.goto = None;
         self.undo_file = None;
         self.highlight = None;
         self.message = None;
@@ -625,22 +677,19 @@ impl Editor
                 | Some(false) => self.resume(then, Answer::No),
                 | None => self.pending = Some(Pending::Confirm { prompt, then })
             },
-            | Some(Pending::Name { prompt, mut text, then }) => match key.code
+            | Some(Pending::Prompt { prompt, mut edit, then }) => match key.code
             {
                 | KeyCode::Esc => self.resume(then, Answer::No),
-                | KeyCode::Enter => self.resume(then, Answer::Name(text)),
-                | KeyCode::Bksp =>
-                {
-                    text.pop();
-                    self.pending = Some(Pending::Name { prompt, text, then });
-                }
+                | KeyCode::Enter => self.resume(then, Answer::Name(edit.chars.iter().collect())),
                 | _ =>
                 {
-                    text.extend(key_char(key).filter(|ch| ch.is_control() == false));
-                    self.pending = Some(Pending::Name { prompt, text, then });
+                    let arg_key = self.keymap.lookup(key) == "arg";
+                    prompt_key(&mut edit, key, self.insert, arg_key);
+                    self.pending = Some(Pending::Prompt { prompt, edit, then });
                 }
             },
-            | Some(pending @ (Pending::Request { .. } | Pending::Search(_))) => match key.code
+            | Some(Pending::Query(replace)) => self.query_key(*replace, key),
+            | Some(pending @ (Pending::Request { .. } | Pending::Search(_) | Pending::Replace(_))) => match key.code
             {
                 | KeyCode::Esc =>
                 {
@@ -684,6 +733,8 @@ impl Editor
             | Then::Ini { tags, startup } => self.ini_loaded(&tags, startup, answer),
             | Then::Paste => self.paste_read(answer),
             | Then::InsertFile { pos } => self.insert_loaded(pos, answer),
+            | then @ (Then::ReplaceFind { .. } | Then::ReplaceWith { .. }) => self.replace_continue(then, answer),
+            | Then::MarkFile { name } => self.mark_continue(&name, answer),
             | then => self.file_continue(then, answer)
         };
         self.run_step(step);
@@ -886,6 +937,18 @@ impl Editor
         if let Some(text) = state.text
         {
             let text: String = text.chars.iter().collect();
+            // A marker of the current file is a selection from the marker to the cursor (plan §6.5).
+            if has(flags::MARKARG) &&
+                let Some(mark) = self.mark_here(&text)
+            {
+                // ORACLE: S6
+                let (top, bottom, left, right) = (mark.line.min(cursor.line), mark.line.max(cursor.line), mark.col.min(cursor.col), mark.col.max(cursor.col));
+                return match has(flags::MARKBOX)
+                {
+                    | true => Some(Arg::Box { count, top, bottom, left, right }),
+                    | false => self.selection(flags, count, mark, cursor)
+                };
+            }
             let number = text.parse::<usize>().ok().filter(|_| has(flags::NUMARG) && text.bytes().all(|byte| byte.is_ascii_digit()));
             return match number
             {
@@ -921,6 +984,13 @@ impl Editor
                 }
             );
         }
+        self.selection(flags, count, anchor, cursor)
+    }
+
+    /// Classifies the selection from `anchor` to `cursor`
+    fn selection(&self, flags: u32, count: usize, anchor: Pos, cursor: Pos) -> Option<Arg>
+    {
+        let has = |flag: u32| flags & flag != 0;
         let (start, end) = (anchor.min(cursor), anchor.max(cursor));
         let (left, right) = (anchor.col.min(cursor.col), anchor.col.max(cursor.col));
         let stream = Arg::Stream { count, start, end };
@@ -1059,11 +1129,44 @@ impl Editor
         self.switches.width.map_or(terminal, |width| width.min(terminal))
     }
 
-    /// Scrolls the window so the cursor is visible
+    /// Scrolls the window so the cursor is visible and remembers where a window jump came from (`arg mark`)
     fn follow(&mut self)
     {
         let (height, width, scroll) = (self.height(), self.width(), self.switches.scroll());
         self.state().view.follow(height, width, scroll);
+        let (current, top) = (self.current, self.view().top);
+        if let Some((file, view)) = self.before.take() &&
+            file == current &&
+            view.top != top
+        {
+            self.jump_back = Some((file, view));
+        }
+    }
+}
+
+/// Edits a dialog line prompt with a key; Enter and Esc are handled by the caller
+// ORACLE: RPL-1
+fn prompt_key(edit: &mut TextArg, key: Key, insert: bool, arg_key: bool)
+{
+    let name = match key.code
+    {
+        | KeyCode::Bksp => "cdelete",
+        | KeyCode::Del => "sdelete",
+        | KeyCode::Left => "left",
+        | KeyCode::Right => "right",
+        | KeyCode::Home => "begline",
+        | KeyCode::End => "endline",
+        | _ if arg_key == true =>
+        {
+            edit.chars.truncate(edit.cursor);
+            return;
+        }
+        | _ => "graphic"
+    };
+    let typed = key_char(key).filter(|ch| ch.is_control() == false).unwrap_or('\0');
+    if name != "graphic" || typed != '\0'
+    {
+        edit_text(edit, name, typed, insert, &[]);
     }
 }
 
@@ -1290,5 +1393,7 @@ mod tests
     {
         assert_eq!(Arg::Text { count: 1, text: "t".into(), pos: Pos::default() }.into_text(), "t");
         assert_eq!(Arg::None.into_text(), "");
+        assert_eq!(Arg::Null { count: 1, pos: Pos::new(1, 2) }.anchor(), Pos::new(1, 2));
+        assert_eq!(Arg::None.anchor(), Pos::default());
     }
 }

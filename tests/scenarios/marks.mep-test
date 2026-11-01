@@ -1,0 +1,194 @@
+== name: mark goes to the start of the file
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+down right mark
+-- expect cursor 0 0
+-- expect result true
+
+== name: arg numarg mark goes to a 0-based line
+-- file a.txt
+0
+1
+2
+-- args a.txt
+-- keys
+arg "2" mark
+-- expect cursor 2 0
+-- keys
+arg "0" mark
+-- expect cursor 0 0
+
+== name: defining and going to a marker; names ignore case
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+down right arg arg "P1" mark
+-- expect result true
+-- keys
+arg mpage arg "p1" mark
+-- expect cursor 1 1
+
+== name: streamarg mark uses the highlighted name
+-- file a.txt
+m1 x
+two
+-- args a.txt
+-- keys
+down arg arg "m1" mark arg mpage arg right right mark
+-- expect cursor 1 0
+
+== name: a marker in another file switches files
+-- file a.txt
+a
+-- file b.txt
+b
+-- args a.txt
+-- keys
+right arg arg "here" mark arg "b.txt" setfile arg "here" mark
+-- expect current a.txt
+-- expect cursor 0 1
+
+== name: an unknown marker fails
+-- keys
+arg "nope" mark
+-- expect message nope: mark not found
+-- expect result false
+
+== name: markers are looked up in markfile
+-- tools.ini
+[mep]
+markfile:marks/list.txt
+-- file marks/list.txt
+bad line
+other x.c 1 1
+start b.txt 1 2
+-- file marks/b.txt
+zero
+one two
+-- keys
+arg "START" mark
+-- expect current marks/b.txt
+-- expect cursor 1 2
+
+== name: a marker missing from markfile fails
+-- tools.ini
+[mep]
+markfile:list.txt
+-- file list.txt
+other x.c 1 1
+-- keys
+arg "nope" mark
+-- expect message nope: mark not found
+
+== name: an unreadable markfile means not found
+-- tools.ini
+[mep]
+markfile:missing.txt
+-- keys
+arg "nope" mark
+-- expect message nope: mark not found
+
+== name: a pseudo markfile name means not found
+-- tools.ini
+[mep]
+markfile:<x>
+-- keys
+arg "nope" mark
+-- expect result false
+
+== name: arg mark returns to the position before the last window jump and back
+-- size 40 6
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+-- args a.txt
+-- keys
+arg mark
+-- expect result false
+-- keys
+arg ppage
+-- expect window 6 0
+-- keys
+arg mark
+-- expect window 0 0
+-- expect cursor 0 0
+-- keys
+arg mark
+-- expect window 6 0
+
+== name: arg mark ignores a jump in another file
+-- size 40 6
+-- file a.txt
+1
+2
+3
+4
+5
+6
+7
+8
+9
+-- file b.txt
+b
+-- args a.txt
+-- keys
+arg ppage arg "b.txt" setfile arg mark
+-- expect result false
+
+== name: mark rejects a linearg
+-- file a.txt
+a
+b
+-- args a.txt
+-- keys
+arg down mark
+-- expect message Invalid argument
+
+== name: mark clears meta
+-- keys
+meta mark
+-- expect meta off
+
+== name: a marker argument copies the stream to the cursor
+-- file a.txt
+abcdef
+-- args a.txt
+-- keys
+right arg arg "m" mark right right right arg "m" copy
+-- expect clipboard stream
+bcd
+
+== name: a marker argument deletes lines
+-- file a.txt
+1
+2
+3
+-- args a.txt
+-- keys
+arg arg "top" mark down arg "top" ldelete
+-- expect file a.txt
+3
+
+== name: a marker of another file is plain text
+-- file a.txt
+a
+-- file b.txt
+b
+-- args a.txt
+-- keys
+arg arg "m" mark arg "b.txt" setfile arg "m" copy
+-- expect clipboard stream
+m

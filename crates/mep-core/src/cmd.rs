@@ -1,7 +1,7 @@
 //! Command table (IMPLEMENTATION_PLAN.md §6.5, §6.7; M guide p. 72; docs/spec/commands)
 
 use crate::{
-    commands::{clipboard, edit, files, misc, movement, search},
+    commands::{clipboard, edit, files, marks, misc, movement, replace, search},
     editor::{Arg, Editor, Step}
 };
 
@@ -42,6 +42,10 @@ pub(crate) mod flags
     pub const TEXTEDIT: u32 = 1 << 15;
     /// Handles the argument state itself
     pub const RAW: u32 = 1 << 16;
+    /// A text naming a marker of the current file is a selection from the marker to the cursor
+    pub const MARKARG: u32 = 1 << 17;
+    /// A marker argument is always a box
+    pub const MARKBOX: u32 = 1 << 18;
 }
 
 use flags::*;
@@ -60,7 +64,8 @@ pub(crate) struct Desc
 
 const MOVE: u32 = CURSORFUNC;
 const WINDOW: u32 = NOARG | NULLARG | NUMARG | COUNT | WINDOWFUNC;
-const BLOCK: u32 = NOARG | NULLARG | LINEARG | BOXARG | STREAMARG | NUMARG | MODIFIES;
+const BLOCK: u32 = NOARG | NULLARG | LINEARG | BOXARG | STREAMARG | NUMARG | MARKARG | MODIFIES;
+const REPLACE: u32 = NOARG | NULLARG | LINEARG | BOXARG | STREAMARG | NUMARG | MARKARG | MARKBOX | MODIFIES;
 const SEARCH: u32 = NOARG | NULLARG | NULLEOW | TEXTARG | BOXSTR;
 const INSERT: u32 = NOARG | MODIFIES;
 
@@ -74,7 +79,7 @@ const TABLE: &[Desc] = &[
     Desc { name: "cancel", flags: RAW, func: misc::cancel },
     Desc { name: "cdelete", flags: NOARG | MODIFIES | TEXTEDIT, func: edit::cdelete },
     Desc { name: "compile", flags: RAW, func: misc::not_available },
-    Desc { name: "copy", flags: NOARG | NULLARG | BOXARG | LINEARG | STREAMARG | TEXTARG | NUMARG, func: clipboard::copy },
+    Desc { name: "copy", flags: NOARG | NULLARG | BOXARG | LINEARG | STREAMARG | TEXTARG | NUMARG | MARKARG, func: clipboard::copy },
     Desc { name: "curdate", flags: INSERT, func: misc::curdate },
     Desc { name: "curday", flags: INSERT, func: misc::curday },
     Desc { name: "curfile", flags: INSERT, func: misc::curfile },
@@ -98,7 +103,7 @@ const TABLE: &[Desc] = &[
     Desc { name: "ldelete", flags: BLOCK, func: edit::ldelete },
     Desc { name: "left", flags: MOVE | TEXTEDIT, func: movement::left },
     Desc { name: "linsert", flags: BLOCK, func: edit::linsert },
-    Desc { name: "mark", flags: RAW, func: misc::not_available },
+    Desc { name: "mark", flags: NOARG | NULLARG | NUMARG | COUNT | TEXTARG | BOXSTR, func: marks::mark },
     Desc { name: "meta", flags: RAW | KEEPMETA, func: misc::meta },
     Desc { name: "mlines", flags: WINDOW, func: movement::mlines },
     Desc { name: "mpage", flags: WINDOW | BOXSTR, func: movement::mpage },
@@ -113,18 +118,18 @@ const TABLE: &[Desc] = &[
     Desc { name: "ppara", flags: MOVE, func: movement::ppara },
     Desc { name: "psearch", flags: SEARCH, func: search::psearch },
     Desc { name: "pword", flags: MOVE, func: movement::pword },
-    Desc { name: "qreplace", flags: RAW, func: misc::not_available },
+    Desc { name: "qreplace", flags: REPLACE, func: replace::qreplace },
     Desc { name: "quote", flags: NOARG | MODIFIES | TEXTEDIT, func: edit::quote },
     Desc { name: "refresh", flags: NOARG | NULLARG, func: files::refresh },
-    Desc { name: "replace", flags: RAW, func: misc::not_available },
+    Desc { name: "replace", flags: REPLACE, func: replace::replace },
     Desc { name: "restcur", flags: MOVE, func: movement::restcur },
     Desc { name: "right", flags: MOVE | TEXTEDIT, func: movement::right },
     Desc { name: "savecur", flags: MOVE, func: movement::savecur },
-    Desc { name: "sdelete", flags: NOARG | NULLARG | STREAMARG | MODIFIES | TEXTEDIT, func: edit::sdelete },
+    Desc { name: "sdelete", flags: NOARG | NULLARG | STREAMARG | MARKARG | MODIFIES | TEXTEDIT, func: edit::sdelete },
     Desc { name: "setfile", flags: NOARG | NULLARG | TEXTARG | BOXSTR, func: files::setfile },
     Desc { name: "setwindow", flags: NOARG | NULLARG | WINDOWFUNC, func: movement::setwindow },
     Desc { name: "shell", flags: RAW, func: misc::not_available },
-    Desc { name: "sinsert", flags: NOARG | NULLARG | STREAMARG | MODIFIES | TEXTEDIT, func: edit::sinsert },
+    Desc { name: "sinsert", flags: NOARG | NULLARG | STREAMARG | MARKARG | MODIFIES | TEXTEDIT, func: edit::sinsert },
     Desc { name: "tab", flags: MOVE, func: movement::tab },
     Desc { name: "unassigned", flags: RAW | KEEPMETA, func: misc::unassigned },
     Desc { name: "undo", flags: NOARG, func: edit::undo },

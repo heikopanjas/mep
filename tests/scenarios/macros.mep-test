@@ -339,8 +339,8 @@ Xabc
 
 == name: not available functions report and clear the argument
 -- keys
-arg mark
--- expect message mark: not available in this version
+arg compile
+-- expect message compile: not available in this version
 -- expect result false
 -- keys
 window

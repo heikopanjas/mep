@@ -20,8 +20,8 @@ Text from the anchor to the first blank (p. 101) becomes the search string. Empt
 ### textarg / streamarg
 Search backward for the text (p. 101).
 
-### `Arg Arg` forms
-M1: `not yet supported`, false (plan §6.7).
+### `Arg Arg` forms (`Arg Arg Msearch`, `Arg Arg textarg/streamarg Msearch`)
+The text (or the word at the anchor for a nullarg) is a regular expression in the syntax of the `regex` crate (plan §10, project decision replacing the M guide's dialect), searched backward. `case` off makes it case-insensitive. A match lies within one line. An invalid pattern → the crate's message, false, the previous search is kept. The pattern becomes the previous search, so a plain `msearch` repeats the regular-expression search.
 
 ### meta
 No meta form. Ignored and cleared.

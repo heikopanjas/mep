@@ -1,28 +1,50 @@
 # replace
 
 Default keys: Ctrl+L
-Source: M guide p. 106 (Table A.3), p. 34 (Ch. 4.4.2), p. 39 (Ch. 5 regex), p. 88 (Table A.1), p. 52 (Table 6.1); z-vs-mep.md S6; IMPLEMENTATION_PLAN.md §6.7, §8 M2, §10, §11 (ORACLE S6)
+Source: M guide p. 106 (Table A.3), p. 34 (Ch. 4.4.2), p. 88 (Table A.1), p. 52 (Table 6.1); z-vs-mep.md S6; IMPLEMENTATION_PLAN.md §6.5, §8 M2, §10, §11 (ORACLE S6)
 
 ## Flags
-For M2, from p. 106: NOARG and NULLARG (identical, p. 34), LINEARG, BOXARG (a multi-line box-shaped selection is a box, plan §6.5), STREAMARG, NUMARG (converted to a linearg), MARKARG; count 2 (`Arg Arg`) selects regular expressions for every form. MODIFIES.
+NOARG and NULLARG (identical, p. 34), LINEARG, BOXARG, STREAMARG, NUMARG (converted to a linearg), MARKARG (always a box, ORACLE S6). Count 2 (`Arg Arg`) selects regular expressions for every form. MODIFIES.
 
 ## Behavior
 
-### M1
-In M1 the command is in the command table so it can be assigned, used in macros and listed, but it does nothing: every invocation (any argument kind, with or without meta) shows `not available` on the dialog line and returns false (IMPLEMENTATION_PLAN.md §6.7). A pending argument and meta are consumed and cleared. The file, cursor and clipboard do not change.
+### Prompts
+The dialog line asks for the search string and then the replacement string, each prefilled with the value used last by `replace` or `qreplace` (p. 34). Enter accepts; the text can be edited with the text-argument keys (left, right, begline, endline, sdelete, cdelete and Backspace, typing in insert or overtype mode); the key bound to `arg` clears to the end (p. 34). Esc cancels: no change, false. An empty search string → message, false.
 
-### Later (M2), for reference
-- Prompts for the search string and the replacement string, showing the previous values (p. 34), then replaces without confirmation from the cursor to the end of the file (noarg, nullarg) or within the selection (linearg, boxarg, streamarg), over n lines (numarg), or between cursor and marker (markarg, a box: p. 34, ORACLE S6).
-- `Arg Arg` forms: regular expression with tagged groups `$0`–`$9` (p. 43, plan §10).
-- `case` switch applies.
-- Table 6.1 p. 52: true = at least one replacement; false = string not found/invalid pattern.
+### Range
+- noarg, nullarg: from the cursor to the end of the file (p. 34).
+- linearg / numarg: the whole lines (p. 34).
+- streamarg: from the earlier to the later position.
+- boxarg: within the box on each of its lines (p. 34).
+- markarg: the box between the cursor and the marker (p. 34). ORACLE S6.
+A match must lie entirely within the range and within one line.
+
+### Matching (plan §10)
+- `Arg`: the search string is literal text. `Arg Arg`: it is a regular expression in the syntax of the `regex` crate, and the replacement may use `$0`, `$1`…, `${name}` and `$$`.
+- `case` off: case-insensitive.
+- An invalid pattern → the crate's message, false, no change.
+- A match that is empty is skipped.
+
+### Result
+Every match in the range is replaced, without confirmation. Long ranges run in slices (plan §3.5); Esc stops the operation and keeps the replacements made so far. The whole command is one undo step. The cursor does not move. Message `<n> replaced`. Returns true if at least one replacement was made; otherwise message `<text> not found`, false (Table 6.1 p. 52).
+
+### meta
+No meta form. Ignored and cleared.
 
 ## Rejected arguments
-In M1 there is no `invalid argument` case: the dispatcher accepts every argument kind for this entry so that all invocations report `not available`. The flags under "Flags" take effect in the milestone that implements the command.
+Textarg (a typed text that is not a number and not a marker name) → `invalid argument`.
 
 ## Open points
-- ORACLE S6 (markarg range shape) applies from M2.
+- ORACLE S6: markarg range is a box.
+- ORACLE RPL-1: prompt order and editing, the cursor staying put, and the `<n> replaced` message are project choices.
 
 ## Test checklist
-- `replace`, `arg replace`, `arg down replace`, `arg "3" replace`, `arg arg replace` → each `not available`, false, file unchanged, no prompt.
-- `meta replace` → `not available`, meta cleared.
+- noarg from the middle of a file replaces only after the cursor; `arg replace` the same.
+- linearg, numarg, streamarg, boxarg ranges; markarg box.
+- `arg arg` regex with `$1`; invalid pattern; empty match skipped.
+- Literal special characters in the single-arg form.
+- `case` switch.
+- Prefilled prompts reuse the previous strings; Esc at either prompt cancels; empty search string fails.
+- Not found → false and message; undo restores everything in one step.
+- Esc during a sliced replace stops it.
+- `arg "x" replace` → invalid argument; `meta replace` clears meta.

@@ -1,27 +1,31 @@
 # qreplace
 
 Default keys: Ctrl+\
-Source: M guide p. 105 (Table A.3), p. 34 (Ch. 4.4.2), p. 32 (Ch. 4.3.1), p. 88 (Table A.1), p. 51 (Table 6.1); IMPLEMENTATION_PLAN.md §6.7, §8 M2, §11 (ORACLE S6), §12 (Ctrl+\ is a terminal signal key)
+Source: M guide p. 105 (Table A.3), p. 34 (Ch. 4.4.2), p. 32 (Ch. 4.3.1), p. 51 (Table 6.1); IMPLEMENTATION_PLAN.md §6.5, §8 M2, §10, §11 (ORACLE S6), §12
 
 ## Flags
-For M2, as replace.md: NOARG, NULLARG (not listed in Table A.3 but p. 34 says Qreplace "takes exactly the same syntax" as Replace), LINEARG, BOXARG, STREAMARG, NUMARG, MARKARG, count 2 = regex. MODIFIES.
+As replace.md: NOARG, NULLARG (p. 34 "takes exactly the same syntax"), LINEARG, BOXARG, STREAMARG, NUMARG, MARKARG (box, ORACLE S6), count 2 = regular expressions. MODIFIES.
 
 ## Behavior
+Everything as replace.md (prompts, range, matching, result, undo), except that each match asks first (p. 34): the cursor moves to the match, the match is highlighted and the dialog line asks `Replace? (y/n/p)`.
+- `y` replaces this match and goes on.
+- `n` skips it and goes on.
+- `p` replaces this and all remaining matches without asking.
+- Esc (`cancel`) ends the operation; replacements made so far stay.
+- Other keys are ignored while asking.
+The cursor stays on the last match asked about. Returns true if at least one replacement was made; otherwise false (Table 6.1 p. 51).
 
-### M1
-In M1 the command is in the command table so it can be assigned, used in macros and listed, but it does nothing: every invocation (any argument kind, with or without meta) shows `not available` on the dialog line and returns false (IMPLEMENTATION_PLAN.md §6.7). A pending argument and meta are consumed and cleared. The file, cursor and clipboard do not change.
-
-### Later (M2), for reference
-- Same as `replace`, but asks at each occurrence: Y replaces, N skips, P replaces the rest without asking; `cancel` ends the operation (p. 34).
-- Table 6.1 p. 51: true = at least one replacement; false = string not found/invalid pattern.
+### meta
+No meta form. Ignored and cleared.
 
 ## Rejected arguments
-In M1 there is no `invalid argument` case: the dispatcher accepts every argument kind for this entry so that all invocations report `not available`. The flags under "Flags" take effect in the milestone that implements the command.
+Textarg → `invalid argument`.
 
 ## Open points
-- Table A.3 (p. 105) has no `Arg Qreplace` (nullarg) line; p. 34 implies it. For M2.
-- ORACLE S6 applies from M2.
+- ORACLE S6, ORACLE RPL-1 as in replace.md.
 
 ## Test checklist
-- `qreplace`, `arg "2" qreplace`, `arg down right qreplace`, `arg arg qreplace` → `not available`, false.
-- `meta qreplace` → `not available`, meta cleared.
+- y, n and p answers; Esc in the middle keeps earlier replacements; other keys ignored.
+- No match → false; all answered n → false.
+- Regex form with groups.
+- `arg "x" qreplace` → invalid argument.

@@ -126,6 +126,11 @@ impl Editor
             self.previous = Some(old);
         }
         self.current = id;
+        // A jump to a marker in another file lands on the marker.
+        if let Some(pos) = self.goto.take()
+        {
+            self.set_cursor(pos);
+        }
     }
 
     /// Opens a file by name: switches if it is open, otherwise loads it (setfile.md)
@@ -234,7 +239,8 @@ impl Editor
             | (Then::Saved { file, after, .. }, Answer::Reply(Reply::Saved(Err(error)))) if error.kind() == ErrorKind::PermissionDenied =>
                 match self.switches.readonly.is_empty()
                 {
-                    | true => Step::Wait(Pending::Name { prompt: "File is read-only. Save as: ".into(), text: String::new(), then: Then::SaveAs { file, after } }),
+                    | true =>
+                        Step::Wait(Pending::Prompt { prompt: "File is read-only. Save as: ".into(), edit: Default::default(), then: Then::SaveAs { file, after } }),
                     | false => self.fail("readonly command: not available in this version")
                 },
             | (Then::Saved { path, .. }, Answer::Reply(Reply::Saved(Err(error)))) => self.fail(&format!("{}: {error}", path.display())),

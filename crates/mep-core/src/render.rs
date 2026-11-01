@@ -160,10 +160,17 @@ impl Editor
             {
                 cursor = (frame.put_str(0, dialog, prompt, self.switches.infcolor), dialog);
             }
-            | (Some(Pending::Name { prompt, text, .. }), _) =>
+            | (Some(Pending::Prompt { prompt, edit, .. }), _) =>
             {
                 let after = frame.put_str(0, dialog, prompt, self.switches.infcolor);
-                cursor = (frame.put_str(after, dialog, text, self.switches.fgcolor), dialog);
+                let text: String = edit.chars.iter().collect();
+                frame.put_str(after, dialog, &text, self.switches.fgcolor);
+                let before: String = edit.chars[..edit.cursor].iter().collect();
+                cursor = (after + cells::width(before.as_bytes()) as u16, dialog);
+            }
+            | (Some(Pending::Query(_)), _) =>
+            {
+                cursor = (frame.put_str(0, dialog, "Replace? (y/n/p)", self.switches.infcolor), dialog);
             }
             | (_, Some(text)) =>
             {

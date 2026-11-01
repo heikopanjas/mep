@@ -32,7 +32,7 @@ The text from the anchor to the first blank or the end of the line becomes the s
 The text becomes the search string, then the search runs (p. 33). The string is remembered even if not found.
 
 ### `Arg Arg` forms (`Arg Arg Psearch`, `Arg Arg textarg/streamarg Psearch`)
-Regular expressions are M2. M1: message `not yet supported`, false; the previous search string is not changed (plan §6.7).
+The text (or the word at the anchor for a nullarg) is a regular expression in the syntax of the `regex` crate (plan §10, project decision replacing the M guide's dialect), searched forward. `case` off makes it case-insensitive. A match lies within one line. An invalid pattern → the crate's message, false, the previous search is kept. The pattern becomes the previous search, so a plain `psearch` repeats the regular-expression search.
 
 ### meta
 No meta form. Ignored and cleared.

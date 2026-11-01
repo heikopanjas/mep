@@ -1,7 +1,10 @@
-//! Plain-string search (docs/spec/commands: psearch, msearch; IMPLEMENTATION_PLAN.md §3.5, §6.11)
+//! Search (docs/spec/commands: psearch, msearch; IMPLEMENTATION_PLAN.md §3.5, §6.11, §10)
 //!
-//! A search scans a bounded number of lines per step, so input stays responsive
-//! and Esc cancels a long search.
+//! `arg` searches for literal text, `arg arg` for a regular expression in the
+//! syntax of the `regex` crate. A search scans a bounded number of lines per
+//! step, so input stays responsive and Esc cancels a long search.
+
+use regex::bytes::{Regex, RegexBuilder};
 
 use crate::{
     cells,
@@ -10,14 +13,27 @@ use crate::{
 };
 
 /// A search in progress
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub(crate) struct Search
 {
     pub(crate) forward: bool,
-    pub(crate) pattern: Vec<char>,
+    pub(crate) regex:   Regex,
+    pub(crate) text:    String,
     pub(crate) origin:  Pos,
     pub(crate) next:    usize,
     pub(crate) done:    bool
+}
+
+/// Compiles a search string: literal text unless `regex`; case-insensitive unless `case` (plan §10)
+pub(crate) fn compile(text: &str, regex: bool, case: bool) -> Result<Regex, String>
+{
+    let pattern = match regex
+    {
+        | true => text.to_string(),
+        | false => regex::escape(text)
+    };
+    // The crate's message spans several lines with a caret display; the last line says what is wrong.
+    RegexBuilder::new(&pattern).case_insensitive(case == false).build().map_err(|error| error.to_string().lines().last().unwrap_or_default().trim().to_string())
 }
 
 /// `psearch` (psearch.md)
@@ -32,72 +48,31 @@ pub(crate) fn msearch(ed: &mut Editor, arg: Arg) -> Step
     start(ed, arg, false)
 }
 
-/// Sets the search string from the argument and runs the first slice
+/// Takes the search string from the argument or the previous search and runs the first slice
 fn start(ed: &mut Editor, arg: Arg, forward: bool) -> Step
 {
-    if arg.count() >= 2
+    let regex = arg.count() >= 2;
+    let wanted = match arg
     {
-        return ed.fail("Regular expressions are not yet supported");
-    }
-    if let Arg::Text { text, .. } = arg
-    {
-        if text.is_empty() == true
-        {
-            return ed.fail("Invalid argument");
-        }
-        ed.search = Some(text);
-    }
-    let Some(pattern) = ed.search.clone()
+        | Arg::Text { text, .. } if text.is_empty() => return ed.fail("Invalid argument"),
+        | Arg::Text { text, .. } => Some((text, regex)),
+        | _ => ed.search.clone()
+    };
+    let Some((text, regex)) = wanted
     else
     {
         return ed.fail("No search string");
     };
-    let origin = ed.cursor();
-    ed.search_step(Search { forward, pattern: pattern.chars().collect(), origin, next: origin.line, done: false })
-}
-
-/// Returns the characters of a line with their byte offsets; invalid bytes become U+FFFD
-fn chars_of(line: &[u8]) -> Vec<(usize, char)>
-{
-    let mut chars = Vec::new();
-    let mut offset = 0;
-    for chunk in line.utf8_chunks()
+    match compile(&text, regex, ed.switches.case)
     {
-        for (at, ch) in chunk.valid().char_indices()
+        | Ok(compiled) =>
         {
-            chars.push((offset + at, ch));
+            ed.search = Some((text.clone(), regex));
+            let origin = ed.cursor();
+            ed.search_step(Search { forward, regex: compiled, text, origin, next: origin.line, done: false })
         }
-        offset += chunk.valid().len();
-        for _ in chunk.invalid()
-        {
-            chars.push((offset, char::REPLACEMENT_CHARACTER));
-            offset += 1;
-        }
+        | Err(error) => ed.fail(&error)
     }
-    chars
-}
-
-/// Folds a character for comparison when `case` is off
-fn fold(ch: char, case: bool) -> char
-{
-    match case
-    {
-        | true => ch,
-        | false => ch.to_lowercase().next().unwrap_or(ch)
-    }
-}
-
-/// Returns the byte ranges of all matches of `pattern` in `line`
-fn matches(line: &[u8], pattern: &[char], case: bool) -> Vec<std::ops::Range<usize>>
-{
-    let chars = chars_of(line);
-    (0..chars.len())
-        .filter(|start| pattern.len() <= chars.len() - start && pattern.iter().zip(&chars[*start..]).all(|(want, (_, have))| fold(*want, case) == fold(*have, case)))
-        .map(|start| {
-            let end = chars.get(start + pattern.len()).map_or(line.len(), |(at, _)| *at);
-            chars[start].0..end
-        })
-        .collect()
 }
 
 impl Editor
@@ -105,25 +80,46 @@ impl Editor
     /// Scans one slice of lines; finds, fails or suspends for the next slice
     pub(crate) fn search_step(&mut self, mut search: Search) -> Step
     {
-        let case = self.switches.case;
         let count = self.line_count();
         for _ in 0..self.slice_lines
         {
             let line = search.next;
             let shown = self.shown_line(line);
-            let found = matches(&shown, &search.pattern, case).into_iter().map(|range| (cells::col_at(&shown, range.start), range)).filter(|(col, _)| {
-                (line != search.origin.line) || (search.forward && *col > search.origin.col) || (search.forward == false && *col < search.origin.col)
-            });
+            let on_origin = line == search.origin.line;
             let hit = match search.forward
             {
-                | true => found.into_iter().next(),
-                | false => found.into_iter().next_back()
+                | true =>
+                {
+                    // Start one character after the cursor so a repeated search finds the next match.
+                    let after = cells::glyphs(&shown).into_iter().find(|glyph| glyph.col == search.origin.col).map_or(shown.len() + 1, |glyph| glyph.bytes.end);
+                    let from = if on_origin
+                    {
+                        after
+                    }
+                    else
+                    {
+                        0
+                    };
+                    (from <= shown.len()).then(|| search.regex.find_at(&shown, from)).flatten()
+                }
+                | false =>
+                {
+                    let limit = if on_origin
+                    {
+                        cells::byte_at(&shown, search.origin.col)
+                    }
+                    else
+                    {
+                        usize::MAX
+                    };
+                    search.regex.find_iter(&shown).take_while(|found| found.start() < limit).last()
+                }
             };
-            if let Some((col, range)) = hit
+            if let Some(found) = hit
             {
-                let width = cells::width(&shown[range]);
+                let col = cells::col_at(&shown, found.start());
                 self.set_cursor(Pos::new(line, col));
-                self.highlight = Some((Pos::new(line, col), width));
+                self.highlight = Some((Pos::new(line, col), cells::width(found.as_bytes())));
                 return Step::Done(true);
             }
             match (search.forward, line)
@@ -139,12 +135,8 @@ impl Editor
         }
         match search.done
         {
-            | true =>
-            {
-                let text: String = search.pattern.iter().collect();
-                self.fail(&format!("{text} not found"))
-            }
-            | false => Step::Wait(Pending::Search(search))
+            | true => self.fail(&format!("{} not found", search.text)),
+            | false => Step::Wait(Pending::Search(Box::new(search)))
         }
     }
 }
@@ -156,13 +148,13 @@ mod tests
     use super::*;
 
     #[test]
-    fn test_matches_fold_case_and_handle_invalid_bytes()
+    fn test_compile_literal_regex_and_case()
     {
-        let pattern: Vec<char> = "ab".chars().collect();
-        assert_eq!(matches(b"xAbab", &pattern, false), vec![1..3, 3..5]);
-        assert_eq!(matches(b"xAbab", &pattern, true), vec![3..5]);
-        assert_eq!(matches(b"\xffab", &pattern, false), vec![1..3]);
-        assert_eq!(matches(b"a", &pattern, false), Vec::<std::ops::Range<usize>>::new());
-        assert_eq!(chars_of("ä\u{fffd}".as_bytes()).len(), 2);
+        assert!(compile("a.c", false, true).unwrap().is_match(b"xa.cx"));
+        assert!(compile("a.c", false, true).unwrap().is_match(b"abc") == false);
+        assert!(compile("a.c", true, true).unwrap().is_match(b"abc"));
+        assert!(compile("ABC", false, false).unwrap().is_match(b"abc"));
+        assert!(compile("ABC", false, true).unwrap().is_match(b"abc") == false);
+        assert_eq!(compile("(a", true, true).unwrap_err(), "error: unclosed group");
     }
 }
