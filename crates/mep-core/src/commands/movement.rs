@@ -26,6 +26,79 @@ fn snap(line: &[u8], col: usize) -> usize
     }
 }
 
+/// Rounds the leading whitespace of `line` to the next (`grow`) or previous `tabstops`
+/// multiple (project addition, tab.md "Block indent with a selection")
+fn reindent(ed: &mut Editor, line: usize, grow: bool)
+{
+    let stops = ed.switches.tabstops;
+    ed.detab_line(line);
+    let current = ed.first_nonblank(line).unwrap_or_else(|| ed.line_width(line));
+    let at = ed.line_start(line);
+    match grow
+    {
+        | true => ed.replace(at..at, &b" ".repeat((current / stops + 1) * stops - current)),
+        | false => ed.replace(at..at + (current - current.saturating_sub(1) / stops * stops), b"")
+    }
+}
+
+/// With `tabinsert`: `tab` inserts spaces up to the tab stop `col`; `backtab` removes the
+/// blanks back to `col` if only blanks are left of the cursor (tab.md, backtab.md)
+fn tab_insert(ed: &mut Editor, grow: bool, col: usize) -> Option<Step>
+{
+    let cursor = ed.cursor();
+    let shown = ed.shown_line(cursor.line);
+    let left = cells::byte_at(&shown, cursor.col);
+    // `backtab` at column 0 or after text stays a cursor movement.
+    require!(grow == true || (cursor.col > 0 && shown[..left].iter().all(|byte| *byte == b' ')), None);
+    match grow
+    {
+        | true =>
+        {
+            let at = ed.prepare(cursor);
+            ed.replace(at..at, &b" ".repeat(col - cursor.col));
+        }
+        // Blanks beyond the end of the line, or of the file, are not in the text.
+        | false if col < left =>
+        {
+            ed.detab_line(cursor.line);
+            let start = ed.line_start(cursor.line);
+            ed.replace(start + col..start + left, b"");
+        }
+        | false => ()
+    }
+    ed.set_cursor(Pos::new(cursor.line, col));
+    Some(Step::Done(true))
+}
+
+/// `tab`/`backtab`: indents or outdents a pending selection's lines, inserts or removes blanks
+/// with `tabinsert`, otherwise moves the cursor to the tab stop `col` (tab.md, backtab.md)
+fn tab_key(ed: &mut Editor, grow: bool, col: usize) -> Step
+{
+    let cursor = ed.cursor();
+    if let Some(anchor) = ed.arg.as_ref().map(|arg| arg.anchor) &&
+        anchor != cursor
+    {
+        let first = anchor.line.min(cursor.line);
+        for line in first..=anchor.line.max(cursor.line).min(ed.last_line())
+        {
+            reindent(ed, line, grow);
+        }
+        ed.arg = None;
+        ed.set_cursor(Pos::new(first, 0));
+        Step::Done(true)
+    }
+    else if ed.switches.tabinsert == true &&
+        ed.arg.is_none() == true &&
+        let Some(step) = tab_insert(ed, grow, col)
+    {
+        step
+    }
+    else
+    {
+        move_to(ed, Pos::new(cursor.line, col))
+    }
+}
+
 /// `left` (left.md)
 pub(crate) fn left(ed: &mut Editor, _: Arg) -> Step
 {
@@ -212,17 +285,15 @@ pub(crate) fn mword(ed: &mut Editor, _: Arg) -> Step
 /// `tab`: next multiple of `tabstops` (tab.md)
 pub(crate) fn tab(ed: &mut Editor, _: Arg) -> Step
 {
-    let cursor = ed.cursor();
     let stops = ed.switches.tabstops;
-    move_to(ed, Pos::new(cursor.line, (cursor.col / stops + 1) * stops))
+    tab_key(ed, true, (ed.cursor().col / stops + 1) * stops)
 }
 
 /// `backtab`: previous multiple of `tabstops` (backtab.md)
 pub(crate) fn backtab(ed: &mut Editor, _: Arg) -> Step
 {
-    let cursor = ed.cursor();
     let stops = ed.switches.tabstops;
-    move_to(ed, Pos::new(cursor.line, cursor.col.saturating_sub(1) / stops * stops))
+    tab_key(ed, false, ed.cursor().col.saturating_sub(1) / stops * stops)
 }
 
 /// `newline`: next line, column per `softcr`; `meta newline`: column 0 (newline.md)

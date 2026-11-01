@@ -214,6 +214,8 @@ Tool (not a crate dependency): `cargo-llvm-cov` for coverage measurement and the
 - When a line containing tabs is **edited**, it is converted to its expanded form (spaces) for editing.
 - On save, **edited** lines are re-tabbed according to `entab` (0 = no tabs, 1 = convert leading/inner runs of spaces outside quotes to tabs, 2 = everywhere; confirm the exact meaning of each value in the manual). Unedited lines are written byte-exact.
 - `tabstops` (default 4) controls the `tab`/`backtab` cursor movement, not file tab width.
+- **Project addition** (`usetabs`, owner's request 2026-11-01, not in the manual): with `usetabs` on, the file tab width is `tabstops` instead of 8, for display and for re-tabbing, and the leading blanks of edited lines are always saved as tabs, whatever `entab` says. Inner runs still follow `entab`.
+- A line counts as edited from loading on, not just since the last save: the buffer keeps the unconverted form (spaces, trailing blanks), so every save must convert it again. Clearing the flags after a save made a second save write the unconverted form.
 
 ### 5.3 Trailing spaces
 - Unless `trailspace` is on, trailing spaces are removed from a line **when that line is edited**. Unedited lines are never touched.
@@ -301,6 +303,8 @@ Color switches take **DOS text attributes in hex** (high nibble background, low 
 - A command called with an arg kind it does not accept: message "invalid argument" and return `false`.
 - `cancel` clears arg mode and the selection.
 - `lasttext` recalls the previous text argument for editing.
+- **Project addition** (`argcol.md`, owner's request 2026-11-01, not in the manual): `argcol` starts/continues arg mode like `arg` but never raises the count, and marks the pending state so that whenever the cursor ends up on a *different line* from the anchor, the selection is always the flat two-point `Arg::Stream { start: anchor.min(cursor), end: anchor.max(cursor) }` (whichever point comes first in the file trimmed to its own column, whichever comes second trimmed up to its own column, everything strictly between whole) rather than the table's "same column → linearg" row, gated by a new `COLARG` flag. The table above is unchanged for plain `arg`.
+- **Project addition** (`tab.md`/`backtab.md`, owner's request 2026-11-01, not in the manual): `tab` and `backtab` are `CURSORFUNC`, so the dispatcher never routes them through `classify()` above; instead each checks `self.arg` itself. If a selection is already pending when the key is pressed (anchor differs from the cursor), `tab` indents and `backtab` outdents every line from the anchor's line to the cursor's line — rounding each line's own leading whitespace to the next/previous `tabstops` multiple — then clears the pending arg and places the cursor at column 0 of the first line, instead of moving to the next/previous tab stop. No new flag; applies regardless of the selection's shape (plain `arg`, `argcol`, or any other movement that left anchor != cursor). With the project switch `tabinsert` on and no arg pending, `tab` inserts spaces at the cursor up to the next tab stop and `backtab` removes blanks back to the previous one when only blanks are left of the cursor.
 
 ### 6.6 Meta
 `meta` toggles the meta flag and **returns the new state**. Most commands clear meta after running; commands with `KEEPMETA` leave it. The status line shows `meta` while set.

@@ -44,6 +44,7 @@ typedef struct fileType *PFILE;
 #define WINDOWFUNC 0x01000
 #define MODIFIES   0x02000
 #define MARKARG    0x20000
+#define COLARG     0x80000 /* project addition: a column-anchored selection; M1988 has no equivalent */
 
 struct noargType     { LINE y; COL x; };
 struct textargType   { int cArg; LINE y; COL x; char *pText; };

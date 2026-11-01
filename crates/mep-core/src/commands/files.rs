@@ -190,7 +190,7 @@ impl Editor
         {
             return self.fail("No file name: use arg arg name setfile");
         };
-        let data = self.files.get(file).map(|file| file.text.save_bytes(self.switches.entab_mode(), self.switches.trailspace)).unwrap_or_default();
+        let data = self.files.get(file).map(|file| file.text.save_bytes(self.switches.retab(), self.switches.trailspace)).unwrap_or_default();
         let id = self.request(RequestKind::Save { path: path.clone(), data, backup: self.switches.backup == Backup::Bak });
         Step::Wait(Pending::Request { id, then: Then::Saved { file, path, after } })
     }
@@ -198,7 +198,7 @@ impl Editor
     /// Writes the current file's contents to another file; the current file is unchanged
     fn write_copy(&mut self, path: Utf8TypedPathBuf) -> Step
     {
-        let data = self.file().text.save_bytes(self.switches.entab_mode(), self.switches.trailspace);
+        let data = self.file().text.save_bytes(self.switches.retab(), self.switches.trailspace);
         let id = self.request(RequestKind::Save { path: path.clone(), data, backup: self.switches.backup == Backup::Bak });
         Step::Wait(Pending::Request { id, then: Then::Saved { file: self.current, path, after: After::Copied } })
     }
@@ -265,7 +265,9 @@ impl Editor
                 target.text = Text::from(loaded.bytes);
                 target.modified = false;
                 target.readonly = loaded.readonly;
-                self.states.entry(file).or_default().undo.clear();
+                let state = self.states.entry(file).or_default();
+                state.undo.clear();
+                state.redo.clear();
                 Step::Done(true)
             }
             | (Then::Reread { .. }, Answer::Reply(Reply::Loaded(Err(error)))) => self.fail(&error.to_string()),
@@ -280,6 +282,9 @@ impl Editor
     }
 
     /// Finishes a save: clears the modified state for the file's own name and continues
+    ///
+    /// Lines stay marked as edited: the buffer keeps their unconverted form, so the next save
+    /// must re-tab and trim them again (plan §5.2).
     fn saved(&mut self, file: FileId, path: &Utf8TypedPathBuf, after: After) -> Step
     {
         if let After::Copied = after
@@ -288,7 +293,6 @@ impl Editor
         }
         let saved = self.file_at(file);
         saved.modified = false;
-        saved.text.clear_edited();
         self.info(&format!("Saved {}", path));
         match after
         {

@@ -9,12 +9,26 @@
 pub mod flags
 {
     pub use crate::cmd::flags::{
-        BOXARG, BOXSTR, CURSORFUNC, KEEPMETA, LINEARG, MARKARG, MODIFIES, NOARG, NULLARG, NULLEOL, NULLEOW, NUMARG, STREAMARG, TEXTARG, WINDOWFUNC
+        BOXARG, BOXSTR, COLARG, CURSORFUNC, KEEPMETA, LINEARG, MARKARG, MODIFIES, NOARG, NULLARG, NULLEOL, NULLEOW, NUMARG, STREAMARG, TEXTARG, WINDOWFUNC
     };
 
     /// The flags an extension may use
-    pub const ALL: u32 =
-        BOXARG | BOXSTR | CURSORFUNC | KEEPMETA | LINEARG | MARKARG | MODIFIES | NOARG | NULLARG | NULLEOL | NULLEOW | NUMARG | STREAMARG | TEXTARG | WINDOWFUNC;
+    pub const ALL: u32 = BOXARG |
+        BOXSTR |
+        COLARG |
+        CURSORFUNC |
+        KEEPMETA |
+        LINEARG |
+        MARKARG |
+        MODIFIES |
+        NOARG |
+        NULLARG |
+        NULLEOL |
+        NULLEOW |
+        NUMARG |
+        STREAMARG |
+        TEXTARG |
+        WINDOWFUNC;
 }
 
 /// The argument passed to an extension function (`ARG`, p. 75)

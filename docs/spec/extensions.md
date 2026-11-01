@@ -10,7 +10,7 @@ Source: M guide Chapter 8 pp. 68–85 (§8.2 how extensions work, §8.3 tables a
 - Extensions stay loaded until the editor ends.
 
 ## Functions (`cmdTable`)
-- Each entry: name, function, a reserved field, flags (p. 72). The flags are the argument types and `KEEPMETA`, `CURSORFUNC`, `WINDOWFUNC`, `MODIFIES`, `BOXSTR`, `NULLEOL`, `NULLEOW`, `NUMARG`, `MARKARG`; `ext.h` gives their values.
+- Each entry: name, function, a reserved field, flags (p. 72). The flags are the argument types and `KEEPMETA`, `CURSORFUNC`, `WINDOWFUNC`, `MODIFIES`, `BOXSTR`, `NULLEOL`, `NULLEOW`, `NUMARG`, `MARKARG`; `ext.h` gives their values. `COLARG` (project addition, `argcol.md`, no manual equivalent) is additive: declaring it hands the extension function a multi-line `ExtArg::Stream` for a column-anchored selection, the same `ExtArg` shape a plain multi-line stream already uses — no new `ExtArg` variant, no ABI break.
 - A function becomes known like a built-in one: it can be assigned to keys, used in macros and in `SetKey`. A name that is already a built-in function keeps the built-in one (ORACLE EXT-2); a name that another extension registered is replaced.
 - The editor checks the argument against the flags as for built-in functions and converts it before the call (MSJ Fig. 6): a number is a `LINEARG`, a marker a stream, box or line selection, a one-line selection with `BOXSTR` a `TEXTARG`, a null argument with `NULLEOL`/`NULLEOW` a `TEXTARG`.
 - The call: `flagType func(unsigned int argData, ARG *pArg, flagType fMeta)` (p. 74). `argData` is the character of the key that invoked the function, 0 for other keys and calls from macros. `fMeta` is −1 if meta is on, 0 otherwise. The return value: 0 is false, anything else true.

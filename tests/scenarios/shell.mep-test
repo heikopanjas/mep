@@ -68,6 +68,18 @@ shell: one
 shell: two
 wait
 
+== name: a column-anchored selection runs the anchor line's tail then the whole next line
+-- file a.txt
+xxone
+two
+-- args a.txt
+-- keys
+right right argcol down down shell
+-- expect log
+shell: one
+shell: two
+wait
+
 == name: empty commands are rejected
 -- file a.txt
 ~

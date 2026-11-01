@@ -12,6 +12,7 @@ Derived from the syntax lines on p. 93:
 - `Arg boxarg Assign` → BOXARG.
 - `Arg ? Assign` → TEXTARG with the exact text `?`.
 - No NOARG line, no NUMARG (a numeric text is a plain textarg and fails as an assignment), no STREAMARG beyond one line (a multi-line box-shaped selection is a BOXARG because BOXARG is set).
+- `Argcol down/up Assign` → COLARG (project addition, argcol.md): a multi-line `Arg::Stream` whose rows (the anchor line's tail, then every whole line between it and the far end) become one statement each, through the same per-line filter/apply loop as `linearg`/`boxarg`.
 - Not KEEPMETA, not CURSORFUNC. Not MODIFIES (it changes editor state, not text).
 - `Arg Arg` has no special meaning; count 2 behaves like count 1.
 

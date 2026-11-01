@@ -9,7 +9,11 @@ use std::collections::BTreeMap;
 use anyhow::anyhow;
 use unicode_width::UnicodeWidthChar;
 
-use crate::{Result, cells::Entab, view::Scroll};
+use crate::{
+    Result,
+    cells::{Entab, Retab, TAB_WIDTH},
+    view::Scroll
+};
 
 /// What happens to the old version of a saved file (`backup`)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,6 +81,8 @@ pub struct Switches
     pub stacolor:      u8,
     /// Character code drawn for tab expansion
     pub tabdisp:       usize,
+    /// `tab`/`backtab` insert/remove blanks at the cursor instead of moving (project addition)
+    pub tabinsert:     bool,
     /// Distance of logical tab stops for `tab` and `backtab`
     pub tabstops:      usize,
     /// Files kept in the information file (M3)
@@ -87,6 +93,8 @@ pub struct Switches
     pub trailspace:    bool,
     /// Undo steps kept per file
     pub undocount:     usize,
+    /// File tabs are `tabstops` wide and edited lines are saved with leading tabs (project addition)
+    pub usetabs:       bool,
     /// Lines to jump when the cursor leaves the window vertically
     pub vscroll:       usize,
     /// Window width from TOOLS.INI, if set
@@ -127,11 +135,13 @@ impl Default for Switches
             softcr:        true,
             stacolor:      0x03,
             tabdisp:       32,
+            tabinsert:     false,
             tabstops:      4,
             tmpsav:        20,
             traildisp:     0,
             trailspace:    false,
             undocount:     10,
+            usetabs:       false,
             vscroll:       7,
             width:         None,
             wordwrap:      false
@@ -200,11 +210,13 @@ const TABLE: &[(&str, Kind)] = &[
     ("softcr", Kind::Flag(|s| &mut s.softcr)),
     ("stacolor", Kind::Color(|s| &mut s.stacolor)),
     ("tabdisp", Kind::Char(|s| &mut s.tabdisp, false)),
+    ("tabinsert", Kind::Flag(|s| &mut s.tabinsert)),
     ("tabstops", Kind::Number(|s| &mut s.tabstops, 1, 255)),
     ("tmpsav", Kind::Number(|s| &mut s.tmpsav, 0, MAX)),
     ("traildisp", Kind::Char(|s| &mut s.traildisp, true)),
     ("trailspace", Kind::Flag(|s| &mut s.trailspace)),
     ("undocount", Kind::Number(|s| &mut s.undocount, 0, MAX)),
+    ("usetabs", Kind::Flag(|s| &mut s.usetabs)),
     ("vmbuf", Kind::IgnoredNumber),
     ("vscroll", Kind::Number(|s| &mut s.vscroll, 1, MAX)),
     ("width", Kind::Optional(|s| &mut s.width, 1, MAX)),
@@ -273,15 +285,27 @@ impl Switches
         Ok(())
     }
 
-    /// Returns the entab mode
-    pub fn entab_mode(&self) -> Entab
+    /// Returns the width of a tab character in the file: `tabstops` with `usetabs`, else 8
+    // ORACLE: TAB-1
+    pub fn tab_width(&self) -> usize
     {
-        match self.entab
+        match self.usetabs
+        {
+            | true => self.tabstops,
+            | false => TAB_WIDTH
+        }
+    }
+
+    /// Returns how edited lines are re-tabbed on save
+    pub fn retab(&self) -> Retab
+    {
+        let mode = match self.entab
         {
             | 0 => Entab::Never,
             | 1 => Entab::OutsideQuotes,
             | _ => Entab::Everywhere
-        }
+        };
+        Retab { mode, tab: self.tab_width(), indent: self.usetabs }
     }
 
     /// Returns the scrolling switches
@@ -351,11 +375,13 @@ mod tests
         ("softcr", "", "x"),
         ("stacolor", "1F", "1FF"),
         ("tabdisp", "183", "127"),
+        ("tabinsert", "", "x"),
         ("tabstops", "8", "256"),
         ("tmpsav", "0", "x"),
         ("traildisp", "0", "31"),
         ("trailspace", "", "x"),
         ("undocount", "0", "x"),
+        ("usetabs", "", "x"),
         ("vmbuf", "128", "x"),
         ("vscroll", "1", "0"),
         ("width", "132", "x"),
@@ -368,6 +394,7 @@ mod tests
         let s = Switches::default();
         assert_eq!((s.undocount, s.displaycursor, s.tabstops, s.tabdisp, s.entab, s.traildisp), (10, false, 4, 32, 1, 0));
         assert_eq!((s.trailspace, s.case, s.enterinsmode, s.softcr, s.wordwrap, s.rmargin), (false, false, false, true, false, 72));
+        assert!(s.tabinsert == false);
         assert_eq!((s.autosave, s.askexit, s.backup, s.readonly.as_str()), (true, false, Backup::None, ""));
         assert_eq!((s.vscroll, s.hscroll, s.hike, s.height, s.width), (7, 10, 4, None, None));
         assert_eq!((s.fgcolor, s.hgcolor, s.stacolor, s.infcolor, s.errcolor, s.noise), (0x07, 0x70, 0x03, 0x06, 0x04, 50));
@@ -480,14 +507,16 @@ mod tests
     }
 
     #[test]
-    fn test_entab_mode_and_scroll()
+    fn test_retab_tab_width_and_scroll()
     {
         let mut s = Switches::default();
-        assert_eq!(s.entab_mode(), Entab::OutsideQuotes);
+        assert_eq!(s.retab(), Retab { mode: Entab::OutsideQuotes, tab: 8, indent: false });
         s.set("entab", "0").unwrap();
-        assert_eq!(s.entab_mode(), Entab::Never);
+        assert_eq!(s.retab().mode, Entab::Never);
         s.set("entab", "2").unwrap();
-        assert_eq!(s.entab_mode(), Entab::Everywhere);
+        assert_eq!(s.retab().mode, Entab::Everywhere);
+        s.set("usetabs", "").unwrap();
+        assert_eq!((s.tab_width(), s.retab().tab, s.retab().indent), (4, 4, true));
         assert_eq!(s.scroll(), Scroll { vscroll: 7, hscroll: 10, hike: 4 });
     }
 }

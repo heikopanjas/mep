@@ -732,6 +732,16 @@ two undo
 arg undo
 -- expect message Invalid argument
 
+== name: a command without colarg falls back to a plain selection
+-- file a.txt
+alpha
+beta
+gamma
+-- args a.txt
+-- keys
+right right argcol down down undo
+-- expect message Invalid argument
+
 == name: undocount 0 with two changes in one command
 -- tools.ini
 [mep]
@@ -743,6 +753,96 @@ ab
 right right right right "x" undo
 -- expect file a.txt
 ab  x
+
+== name: redo reapplies what undo undid, cursor where it was after the change
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+right "xy" right undo redo
+-- expect file a.txt
+axy
+-- expect cursor 0 3
+-- expect result true
+
+== name: redo reapplies a deleted line
+-- file a.txt
+alpha
+beta
+gamma
+-- args a.txt
+-- keys
+down ldelete undo redo
+-- expect file a.txt
+alpha
+gamma
+-- expect cursor 1 0
+
+== name: redo goes forward step by step after undo goes back
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+"x" "y" "z"
+-- expect file a.txt
+xyz
+-- keys
+undo undo undo
+-- expect file a.txt
+abc
+-- keys
+redo redo redo
+-- expect file a.txt
+xyz
+
+== name: a new edit after undo clears the redo stack
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+"x" undo "z" redo
+-- expect file a.txt
+zbc
+
+== name: undo and redo toggle back and forth
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+"x" undo redo undo redo
+-- expect file a.txt
+xbc
+
+== name: undocount also limits how many steps redo can reach
+-- tools.ini
+[mep]
+undocount:2
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+"x" "y" "z" undo undo undo
+-- expect file a.txt
+xbc
+-- keys
+redo redo redo
+-- expect file a.txt
+xyz
+
+== name: redo with nothing to redo does nothing
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+redo
+-- expect file a.txt
+abc
+-- expect result true
+
+== name: redo rejects an argument
+-- keys
+arg redo
+-- expect message Invalid argument
 
 == name: box ldelete reaching beyond the file
 -- file a.txt

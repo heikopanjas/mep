@@ -12,6 +12,7 @@ From p. 99, p. 29, p. 49:
 - `Arg boxarg Linsert` → BOXARG.
 - `Arg streamarg Linsert` → STREAMARG (one line).
 - MARKARG (M2). MODIFIES. No TEXTARG.
+- `Argcol down/up Linsert` → COLARG (project addition, argcol.md).
 - Not KEEPMETA. `Arg Arg` behaves like `Arg`.
 
 ## Behavior
@@ -31,6 +32,9 @@ Inserts a box of blanks: on each line from the upper to the lower line, box-widt
 
 ### streamarg (one line)
 Inserts blanks between the two positions on the line (same as a one-line box). Cursor: left position. Returns true.
+
+### colarg (project addition, argcol.md)
+Same single-line path as streamarg when the anchor and cursor end up on one line. Otherwise, the exact inverse of what `ldelete` would remove for the same column-anchored shape: splits the line that comes first in the file at its own column, pushing the tail down, adds one blank line for every further line strictly between the two points, and pads the moved text by the second point's column width. Cursor: whichever end comes first in the file. Returns true.
 
 ### meta
 No meta form. Ignored and cleared.

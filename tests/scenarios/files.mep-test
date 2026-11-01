@@ -171,6 +171,56 @@ down "        " arg arg setfile
 keep   
 \tx
 
+== name: usetabs shows file tabs tabstops wide
+-- tools.ini
+[mep]
+usetabs:
+-- file a.txt
+\tx
+-- args a.txt
+-- keys
+endline
+-- expect cursor 0 5
+
+== name: usetabs saves the leading blanks of edited lines as tabs
+-- tools.ini
+[mep]
+usetabs:
+entab:0
+-- file a.txt
+one
+two
+-- args a.txt
+-- keys
+"     x  y" down arg arg setfile
+-- expect disk a.txt
+\t x  y
+two
+
+== name: tabinsert with usetabs indents with real tabs on disk
+-- tools.ini
+[mep]
+usetabs:
+tabinsert:
+-- file a.txt
+one
+-- args a.txt
+-- keys
+tab tab arg arg setfile
+-- expect disk a.txt
+\t\tone
+
+== name: a second save converts the earlier edited lines again
+-- file a.txt
+keep
+        x  
+-- args a.txt
+-- keys
+down "        " arg arg setfile up "y" arg arg setfile
+-- expect disk a.txt
+keep\ty
+\tx
+
 == name: arg arg textarg setfile writes a copy and keeps the file modified
 -- file a.txt
 one
@@ -352,6 +402,16 @@ one
 -- expect result true
 -- expect status
 /work/a.txt (text NL) Length=1  Window=(1,1)
+
+== name: refresh after undo also clears the redo stack
+-- file a.txt
+one
+-- args a.txt
+-- keys
+"X" undo refresh "y" redo
+-- expect file a.txt
+one
+-- expect result true
 
 == name: refresh declined keeps the edits
 -- file a.txt

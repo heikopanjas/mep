@@ -50,7 +50,7 @@ impl Editor
     /// Returns a line as displayed: tabs expanded; empty beyond the end of the file
     pub(crate) fn shown_line(&self, line: usize) -> Vec<u8>
     {
-        cells::detab(&self.file().text.line(line))
+        cells::detab(&self.file().text.line(line), self.switches.tab_width())
     }
 
     /// Returns the width of a line in cells
@@ -114,17 +114,19 @@ impl Editor
         file.modified = true;
         // A command that edits several files (an extension) gets one group per file.
         let open = self.undo_files.contains(&current);
-        let undo = &mut self.state().undo;
+        let state = self.state();
         if open == false
         {
-            undo.push(Group { cursor, edits: Vec::new() });
+            state.undo.push(Group { cursor, after: cursor, edits: Vec::new() });
+            // A real edit (not `redo` itself, which bypasses `replace`) retires the undone future.
+            state.redo.clear();
         }
-        if let Some(group) = undo.last_mut()
+        if let Some(group) = state.undo.last_mut()
         {
             group.edits.push(Edit { offset: range.start, removed, inserted: bytes.to_vec() });
         }
-        let excess = undo.len().saturating_sub(undocount);
-        undo.drain(..excess);
+        let excess = state.undo.len().saturating_sub(undocount);
+        state.undo.drain(..excess);
         if open == false
         {
             self.undo_files.push(current);
@@ -170,7 +172,7 @@ impl Editor
             if raw.contains(&b'\t') == true
             {
                 let range = self.file().text.line_range(line);
-                self.replace(range, &cells::detab(&raw));
+                self.replace(range, &cells::detab(&raw, self.switches.tab_width()));
             }
         }
     }
@@ -277,6 +279,27 @@ impl Editor
             text.insert(edit.offset, &edit.removed).unwrap_or_default();
         }
         self.set_cursor(group.cursor);
+        self.state().redo.push(group);
+    }
+
+    /// Reapplies the last change group `undo` undid (redo.md)
+    // ORACLE: REDO-1
+    pub(crate) fn redo_step(&mut self)
+    {
+        let Some(group) = self.state().redo.pop()
+        else
+        {
+            return;
+        };
+        for edit in group.edits.iter()
+        {
+            let text = &mut self.file_mut().text;
+            text.delete(edit.offset..edit.offset + edit.removed.len()).unwrap_or_default();
+            text.insert(edit.offset, &edit.inserted).unwrap_or_default();
+        }
+        self.file_mut().modified = true;
+        self.set_cursor(group.after);
+        self.state().undo.push(group);
     }
 
     /// Puts text into the clipboard and the system clipboard; rewrites an open `<clipboard>` (plan §6.9)

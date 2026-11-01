@@ -44,7 +44,9 @@ impl Editor
         let file = self.file_at(id);
         file.text = Text::from(bytes);
         file.modified = false;
-        self.state_of(id).undo.clear();
+        let state = self.state_of(id);
+        state.undo.clear();
+        state.redo.clear();
         id
     }
 

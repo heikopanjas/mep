@@ -9,6 +9,7 @@ From p. 107:
 - `Arg Sdelete` → NULLARG.
 - `Arg streamarg/linearg/boxarg Sdelete` → STREAMARG only: all three are deleted as a stream "from the initial cursor position up to the current cursor position" (p. 107; p. 21). LINEARG and BOXARG are not set; the dispatcher passes any selection as a stream (p. 73; plan §6.5).
 - MODIFIES. MARKARG (M2). No TEXTARG, no NUMARG (numeric text is a textarg and is rejected).
+- No `COLARG` (project addition, argcol.md): `sdelete` has no `LINEARG`, so it already falls back to a flat `Arg::Stream` for any multi-line movement, `argcol`-tagged or not — both give it the exact same stream (whichever end comes first trimmed to its own column, whichever comes second trimmed up to its own column). `argcol` only changes behavior for commands that would otherwise take the whole-line `LINEARG` path.
 - Not KEEPMETA. `Arg Arg` behaves like `Arg`.
 
 ## Behavior

@@ -54,26 +54,7 @@ impl Span
         match self
         {
             | Self::From(pos) if line == pos.line => at(pos.col)..shown.len(),
-            | Self::Stream(start, end) =>
-            {
-                let from = if line == start.line
-                {
-                    at(start.col)
-                }
-                else
-                {
-                    0
-                };
-                let to = if line == end.line
-                {
-                    at(end.col)
-                }
-                else
-                {
-                    shown.len()
-                };
-                from..to.max(from)
-            }
+            | Self::Stream(start, end) => crate::commands::edit::stream_window(shown, line, start, end),
             | Self::Box { left, right, .. } => cells::box_range(shown, left, right),
             | _ => 0..shown.len()
         }

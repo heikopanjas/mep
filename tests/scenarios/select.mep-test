@@ -1,0 +1,192 @@
+== name: argcol down once trims the anchor line's tail and the next line's prefix
+-- file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+-- args a.txt
+-- keys
+right right argcol down copy
+-- expect clipboard stream
+pha
+be
+
+== name: argcol down twice makes the middle line whole
+-- file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+-- args a.txt
+-- keys
+right right argcol down down copy
+-- expect clipboard stream
+pha
+beta
+ga
+
+== name: argcol up once trims the cursor line's tail and the anchor line's prefix
+-- file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+-- args a.txt
+-- keys
+down down down down right right right argcol up copy
+-- expect clipboard stream
+ta
+eps
+
+== name: argcol up twice makes the middle line whole
+-- file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+-- args a.txt
+-- keys
+down down down down right right right argcol up up copy
+-- expect clipboard stream
+ma
+delta
+eps
+
+== name: reversing direction recomputes the selection
+-- file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+-- args a.txt
+-- keys
+right right argcol down down up copy
+-- expect clipboard stream
+pha
+be
+
+== name: ldelete cuts a column-anchored selection and keeps a clean round trip
+-- file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+-- args a.txt
+-- keys
+right right argcol down down ldelete
+-- expect file a.txt
+almma
+delta
+epsilon
+-- expect cursor 0 2
+-- expect clipboard stream
+pha
+beta
+ga
+-- keys
+paste
+-- expect file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+
+== name: replace touches the trimmed window on both the anchor and the far line
+-- file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+-- args a.txt
+-- keys
+right right argcol down down replace "a" enter "X" enter
+-- expect file a.txt
+alphX
+betX
+gXmma
+delta
+epsilon
+
+== name: sdelete honors argcol, matching the highlighted shape
+-- file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+-- args a.txt
+-- keys
+right right argcol down down sdelete
+-- expect file a.txt
+almma
+delta
+epsilon
+
+== name: plain arg down down sdelete keeps the old column-sweep behavior
+-- file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+-- args a.txt
+-- keys
+right right arg down down sdelete
+-- expect file a.txt
+almma
+delta
+epsilon
+
+== name: linsert on a column-anchored selection is the exact inverse of the matching delete
+-- file a.txt
+alpha
+beta
+gamma
+delta
+epsilon
+-- args a.txt
+-- keys
+right right argcol down down linsert
+-- expect file a.txt
+al
+~
+  pha
+beta
+gamma
+delta
+epsilon
+
+== name: argcol past the end of the file does not run away
+-- file a.txt
+alpha
+beta
+-- args a.txt
+-- keys
+down down down down argcol down down down copy
+-- expect clipboard stream
+~
+
+== name: shift+down through the owner's macro reaches argcol
+-- tools.ini
+[mep]
+Selectdown:=Argcol Down
+Selectdown:Shift+Down
+-- file a.txt
+alpha
+beta
+gamma
+-- args a.txt
+-- keys
+right right shift+down shift+down copy
+-- expect clipboard stream
+pha
+beta
+ga

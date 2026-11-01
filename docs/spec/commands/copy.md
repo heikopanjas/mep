@@ -13,6 +13,7 @@ From p. 95:
 - `Arg textarg Copy` → TEXTARG.
 - `Arg numarg Copy` → NUMARG, converted to a linearg of n lines from the cursor line.
 - `Arg markarg Copy` → MARKARG (M2; in M1 a mark name is a textarg).
+- `Argcol down/up Copy` → COLARG (project addition, argcol.md): a multi-line stream whose anchor line is trimmed to the anchor's column, every other line whole.
 - Not MODIFIES. Not KEEPMETA. `Arg Arg` behaves like `Arg`.
 
 ## Behavior
@@ -38,6 +39,9 @@ The cells between the two positions, stream shape (p. 22). Returns true.
 
 ### boxarg
 The box from the left edge up to (not including) the right edge on each line, box shape with the box width; short rows padded with spaces in the internal clipboard; the plain text trims the padding (plan §3.3). Wide characters per plan §3.2. Returns true.
+
+### colarg (project addition, argcol.md)
+The column-anchored stream, stream shape: whichever of the anchor and cursor comes first in the file is trimmed to its own column onward, whichever comes second is trimmed up to its own column, every line strictly between them is whole. Tabs reach the clipboard as spaces, like `boxarg`. Returns true.
 
 ### meta
 No meta form. Ignored and cleared.

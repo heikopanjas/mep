@@ -79,6 +79,25 @@ impl Editor
         {
             pos == anchor
         }
+        else if arg.col && anchor.line != cursor.line
+        {
+            // A column-anchored selection (argcol.md): whichever point comes first in the
+            // file is trimmed from its own column onward, whichever comes second is trimmed
+            // up to its own column, everything strictly between is whole.
+            let (start, end) = (anchor.min(cursor), anchor.max(cursor));
+            if pos.line == start.line
+            {
+                pos.col >= start.col
+            }
+            else if pos.line == end.line
+            {
+                pos.col < end.col
+            }
+            else
+            {
+                pos.line > start.line && pos.line < end.line
+            }
+        }
         else if anchor.col == cursor.col
         {
             (top..=bottom).contains(&pos.line)
@@ -98,7 +117,7 @@ impl Editor
         let highlighted = |pos: Pos| index == self.active && self.highlighted(pos);
         let x = |col: usize| (rect.left + col - view.left) as u16;
         let y = (rect.top + row) as u16;
-        let glyphs = cells::glyphs(&raw);
+        let glyphs = cells::layout(&raw, self.switches.tab_width());
         let trailing = glyphs.iter().rposition(|glyph| glyph.kind != GlyphKind::Char(' ')).map_or(0, |last| last + 1);
         let show_trailing = self.switches.trailspace == true && self.switches.traildisp != 0;
         let fill = |code: usize| char::from_u32(code as u32).unwrap_or(' ').to_string();
@@ -235,5 +254,74 @@ impl Editor
             | (None, true) => CursorShape::Bar
         };
         frame
+    }
+}
+
+#[cfg(test)]
+#[coverage(off)]
+mod tests
+{
+    use super::*;
+    use crate::{
+        editor::{ArgState, Startup},
+        env::FixedEnv
+    };
+
+    fn editor() -> Editor
+    {
+        let startup = Startup {
+            cols:      40,
+            rows:      8,
+            exe:       "mep".into(),
+            files:     Vec::new(),
+            execute:   Vec::new(),
+            tools_ini: false,
+            temporary: false
+        };
+        let mut editor = Editor::new(Box::new(FixedEnv::default()), startup);
+        editor.start();
+        editor.replace(0..0, b"alpha\nbeta\ngamma\n");
+        editor
+    }
+
+    #[test]
+    fn test_column_anchored_highlight_down()
+    {
+        let mut ed = editor();
+        ed.arg = Some(ArgState { count: 1, anchor: Pos::new(0, 2), text: None, col: true });
+        ed.set_cursor(Pos::new(1, 2));
+        assert!(ed.highlighted(Pos::new(0, 1)) == false, "before the anchor column");
+        assert!(ed.highlighted(Pos::new(0, 2)) == true, "the anchor's own cell");
+        assert!(ed.highlighted(Pos::new(0, 4)) == true, "after the anchor column, still the anchor line");
+        assert!(ed.highlighted(Pos::new(1, 0)) == true, "the cursor's line, before the cursor's own column");
+        assert!(ed.highlighted(Pos::new(1, 2)) == false, "the cursor's own cell is excluded going down");
+
+        ed.set_cursor(Pos::new(2, 2));
+        assert!(ed.highlighted(Pos::new(1, 0)) == true, "a second press makes the earlier cursor line whole");
+        assert!(ed.highlighted(Pos::new(1, 3)) == true);
+        assert!(ed.highlighted(Pos::new(2, 0)) == true, "the new cursor line, before its own column");
+        assert!(ed.highlighted(Pos::new(2, 2)) == false, "the new cursor's own cell is excluded");
+        assert!(ed.highlighted(Pos::new(3, 0)) == false, "a line past the cursor's line is outside the selection");
+    }
+
+    #[test]
+    fn test_column_anchored_highlight_up()
+    {
+        let mut ed = editor();
+        ed.arg = Some(ArgState { count: 1, anchor: Pos::new(2, 2), text: None, col: true });
+        ed.set_cursor(Pos::new(1, 2));
+        assert!(ed.highlighted(Pos::new(2, 1)) == true, "before the anchor column");
+        assert!(ed.highlighted(Pos::new(2, 2)) == false, "the anchor's own cell is excluded going up");
+        assert!(ed.highlighted(Pos::new(1, 0)) == false, "the cursor's line, before the cursor's own column");
+        assert!(ed.highlighted(Pos::new(1, 2)) == true, "the cursor's line, at its own column");
+        assert!(ed.highlighted(Pos::new(1, 3)) == true, "the cursor's line, after its own column");
+        assert!(ed.highlighted(Pos::new(0, 0)) == false, "a line before the cursor's line is outside the selection");
+
+        ed.set_cursor(Pos::new(0, 2));
+        assert!(ed.highlighted(Pos::new(1, 0)) == true, "a second press makes the earlier cursor line whole");
+        assert!(ed.highlighted(Pos::new(1, 4)) == true);
+        assert!(ed.highlighted(Pos::new(0, 0)) == false, "the new cursor line, before its own column");
+        assert!(ed.highlighted(Pos::new(0, 2)) == true, "the new cursor line, at its own column");
+        assert!(ed.highlighted(Pos::new(2, 2)) == false, "the anchor's own cell is still excluded");
     }
 }

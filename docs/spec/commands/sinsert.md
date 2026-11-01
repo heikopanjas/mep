@@ -9,6 +9,7 @@ From p. 108:
 - `Arg Sinsert` → NULLARG.
 - `Arg boxarg/linearg/streamarg Sinsert` → STREAMARG: every selection is treated as a stream from the anchor to the cursor (same wording as `sdelete`).
 - MODIFIES. MARKARG (M2). No TEXTARG, no NUMARG.
+- No `COLARG` (project addition, argcol.md): like `sdelete`, `sinsert` has no `LINEARG`, so any multi-line movement already reaches it as the exact same flat `Arg::Stream`, `argcol`-tagged or not — nothing to opt into.
 - Not KEEPMETA. `Arg Arg` behaves like `Arg`.
 
 ## Behavior

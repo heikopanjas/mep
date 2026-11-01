@@ -11,7 +11,7 @@ use std::ops::Range;
 /// `head` holds absolute starts in ascending order. `tail` holds the remaining
 /// starts as distances from the end of the text, nearest line last, so inserts
 /// and deletes before them leave them valid without shifting. Each start
-/// carries whether the line was edited since loading or saving.
+/// carries whether the line was edited since loading.
 #[derive(Debug)]
 pub struct LineIndex
 {
@@ -57,7 +57,7 @@ impl LineIndex
         self.start(line)..end
     }
 
-    /// Returns `true` if line `line` was edited since loading or the last [`LineIndex::clear_edited`]
+    /// Returns `true` if line `line` was edited since loading
     pub fn edited(&self, line: usize) -> bool
     {
         match line.checked_sub(self.head.len())
@@ -65,12 +65,6 @@ impl LineIndex
             | None => self.head[line].1,
             | Some(behind) => self.tail[self.tail.len() - 1 - behind].1
         }
-    }
-
-    /// Marks all lines as unedited, after saving
-    pub fn clear_edited(&mut self)
-    {
-        self.head.iter_mut().chain(self.tail.iter_mut()).for_each(|entry| entry.1 = false);
     }
 
     /// Returns the line that contains byte `offset` (the last line for the end offset)
@@ -226,10 +220,8 @@ mod tests
         assert_eq!(edited(&index), vec![false, true, true, false, false]);
         index.delete(8..10);
         assert_eq!(edited(&index), vec![false, true, true, true]);
-        index.clear_edited();
-        assert_eq!(edited(&index), vec![false; 4]);
         index.insert(0, b"z");
-        assert_eq!(edited(&index), vec![true, false, false, false]);
+        assert_eq!(edited(&index), vec![true, true, true, true]);
     }
 
     #[test]

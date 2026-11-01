@@ -2,14 +2,14 @@
 //!
 //! A column is a display cell. Wide characters take two cells, zero-width
 //! characters attach to the preceding character, tabs expand to the next
-//! multiple of [`TAB_WIDTH`], and every invalid UTF-8 byte or control
+//! multiple of the file tab width, and every invalid UTF-8 byte or control
 //! character takes one cell.
 
 use std::ops::Range;
 
 use unicode_width::UnicodeWidthChar;
 
-/// Width of a tab character in the file
+/// Width of a tab character in the file unless `usetabs` makes it `tabstops`
 // ORACLE: TAB-1
 pub const TAB_WIDTH: usize = 8;
 
@@ -54,8 +54,26 @@ pub enum Entab
     Everywhere
 }
 
-/// Splits `line` into glyphs
+/// How an edited line is re-tabbed on save
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Retab
+{
+    /// The `entab` conversion
+    pub mode:   Entab,
+    /// The file tab width
+    pub tab:    usize,
+    /// With `usetabs`: leading blanks always become tabs
+    pub indent: bool
+}
+
+/// Splits a displayed line, which has no tabs, into glyphs
 pub fn glyphs(line: &[u8]) -> Vec<Glyph>
+{
+    layout(line, TAB_WIDTH)
+}
+
+/// Splits a file line into glyphs, tabs expanding to multiples of `tab`
+pub fn layout(line: &[u8], tab: usize) -> Vec<Glyph>
 {
     let mut glyphs: Vec<Glyph> = Vec::new();
     let mut byte = 0;
@@ -67,7 +85,7 @@ pub fn glyphs(line: &[u8]) -> Vec<Glyph>
             let len = ch.len_utf8();
             let (kind, width) = match ch
             {
-                | '\t' => (GlyphKind::Tab, TAB_WIDTH - col % TAB_WIDTH),
+                | '\t' => (GlyphKind::Tab, tab - col % tab),
                 | ch if ch.is_control() => (GlyphKind::Control(ch), 1),
                 | ch => (GlyphKind::Char(ch), ch.width().unwrap_or(1))
             };
@@ -123,11 +141,11 @@ pub fn box_range(line: &[u8], left: usize, right: usize) -> Range<usize>
     start..end.max(start)
 }
 
-/// Replaces tabs with the spaces they display as
-pub fn detab(line: &[u8]) -> Vec<u8>
+/// Replaces tabs with the spaces they display as with tab width `tab`
+pub fn detab(line: &[u8], tab: usize) -> Vec<u8>
 {
     let mut out = Vec::with_capacity(line.len());
-    for glyph in glyphs(line)
+    for glyph in layout(line, tab)
     {
         match glyph.kind
         {
@@ -141,21 +159,25 @@ pub fn detab(line: &[u8]) -> Vec<u8>
 /// Replaces runs of two or more spaces that reach a tab stop with tabs
 ///
 /// The displayed line does not change. With [`Entab::OutsideQuotes`], spaces
-/// between `"` or `'` quotes are kept.
-pub fn entab(line: &[u8], mode: Entab) -> Vec<u8>
+/// between `"` or `'` quotes are kept. With `indent`, the leading blanks become
+/// tabs whatever the mode.
+pub fn entab(line: &[u8], retab: Retab) -> Vec<u8>
 {
-    require!(mode != Entab::Never, line.to_vec());
+    let Retab { mode, tab, indent } = retab;
+    require!(mode != Entab::Never || indent == true, line.to_vec());
     let mut out = Vec::with_capacity(line.len());
     let mut quote = None;
     let mut spaces = 0;
-    for glyph in glyphs(line)
+    let mut leading = indent;
+    for glyph in layout(line, tab)
     {
         let kind = glyph.kind;
+        leading = leading && (kind == GlyphKind::Tab || (kind == GlyphKind::Char(' ') && glyph.bytes.len() == 1));
         // A space carrying zero-width characters is content, not white space.
-        if kind == GlyphKind::Char(' ') && glyph.bytes.len() == 1 && (mode == Entab::Everywhere || quote.is_none())
+        if kind == GlyphKind::Char(' ') && glyph.bytes.len() == 1 && (leading == true || (mode != Entab::Never && (mode == Entab::Everywhere || quote.is_none())))
         {
             spaces += 1;
-            if (glyph.col + 1) % TAB_WIDTH == 0
+            if (glyph.col + 1) % tab == 0
             {
                 out.push(
                     if spaces > 1
@@ -194,6 +216,11 @@ mod tests
     use proptest::prelude::*;
 
     use super::*;
+
+    fn retab(mode: Entab) -> Retab
+    {
+        Retab { mode, tab: TAB_WIDTH, indent: false }
+    }
 
     fn layout(line: &[u8]) -> Vec<(Range<usize>, usize, usize)>
     {
@@ -285,49 +312,66 @@ mod tests
     #[test]
     fn test_detab_replaces_tabs_with_spaces()
     {
-        assert_eq!(detab(b"a\tb"), b"a       b");
-        assert_eq!(detab(b"\xff\t"), b"\xff       ");
+        assert_eq!(detab(b"a\tb", TAB_WIDTH), b"a       b");
+        assert_eq!(detab(b"\xff\t", TAB_WIDTH), b"\xff       ");
+    }
+
+    #[test]
+    fn test_tab_width_follows_the_layout()
+    {
+        assert_eq!(detab(b"a\tb", 4), b"a   b");
+        assert_eq!(super::layout(b"\t\t", 4)[1].col, 4);
+    }
+
+    #[test]
+    fn test_entab_indent_tabs_leading_blanks_only()
+    {
+        let indent = |mode| Retab { mode, tab: 4, indent: true };
+        assert_eq!(entab(b"         x  y", indent(Entab::Never)), b"\t\t x  y");
+        assert_eq!(entab(b"  \t  x    y", indent(Entab::Never)), b"  \t  x    y");
+        assert_eq!(entab(b"    x    y", indent(Entab::OutsideQuotes)), b"\tx\t y");
+        assert_eq!(entab(" \u{301}   x".as_bytes(), indent(Entab::Never)), " \u{301}   x".as_bytes());
     }
 
     #[test]
     fn test_entab_never_keeps_spaces()
     {
-        assert_eq!(entab(b"        x", Entab::Never), b"        x");
+        assert_eq!(entab(b"        x", retab(Entab::Never)), b"        x");
     }
 
     #[test]
     fn test_entab_converts_runs_reaching_a_tab_stop()
     {
-        assert_eq!(entab(b"        x", Entab::OutsideQuotes), b"\tx");
-        assert_eq!(entab(b"a       b", Entab::OutsideQuotes), b"a\tb");
-        assert_eq!(entab(b"                 x", Entab::OutsideQuotes), b"\t\t x");
-        assert_eq!(entab(b"x   ", Entab::OutsideQuotes), b"x   ");
+        assert_eq!(entab(b"        x", retab(Entab::OutsideQuotes)), b"\tx");
+        assert_eq!(entab(b"a       b", retab(Entab::OutsideQuotes)), b"a\tb");
+        assert_eq!(entab(b"                 x", retab(Entab::OutsideQuotes)), b"\t\t x");
+        assert_eq!(entab(b"x   ", retab(Entab::OutsideQuotes)), b"x   ");
     }
 
     #[test]
     fn test_entab_keeps_single_space_before_tab_stop()
     {
-        assert_eq!(entab(b"abcdefg h", Entab::OutsideQuotes), b"abcdefg h");
+        assert_eq!(entab(b"abcdefg h", retab(Entab::OutsideQuotes)), b"abcdefg h");
     }
 
     #[test]
     fn test_entab_outside_quotes_keeps_quoted_spaces()
     {
-        assert_eq!(entab(b"\"        \"        x", Entab::OutsideQuotes), b"\"        \"\t  x");
-        assert_eq!(entab(b"'\"        '", Entab::OutsideQuotes), b"'\"        '");
-        assert_eq!(entab(b"\"        \"", Entab::Everywhere), b"\"\t \"");
+        assert_eq!(entab(b"\"        \"        x", retab(Entab::OutsideQuotes)), b"\"        \"\t  x");
+        assert_eq!(entab(b"'\"        '", retab(Entab::OutsideQuotes)), b"'\"        '");
+        assert_eq!(entab(b"\"        \"", retab(Entab::Everywhere)), b"\"\t \"");
     }
 
     #[test]
     fn test_entab_keeps_space_with_combining_mark()
     {
-        assert_eq!(entab(" \u{301}       x".as_bytes(), Entab::Everywhere), " \u{301}\tx".as_bytes());
+        assert_eq!(entab(" \u{301}       x".as_bytes(), retab(Entab::Everywhere)), " \u{301}\tx".as_bytes());
     }
 
     #[test]
     fn test_entab_counts_cells_of_wide_characters()
     {
-        assert_eq!(entab("日本      x".as_bytes(), Entab::OutsideQuotes), "日本\t  x".as_bytes());
+        assert_eq!(entab("日本      x".as_bytes(), retab(Entab::OutsideQuotes)), "日本\t  x".as_bytes());
     }
 
     fn line() -> impl Strategy<Value = Vec<u8>>
@@ -377,12 +421,12 @@ mod tests
         #[test]
         fn prop_entab_and_detab_keep_the_display(line in line())
         {
-            let shown = detab(&line);
+            let shown = detab(&line, TAB_WIDTH);
             prop_assert!(shown.contains(&b'\t') == false);
             prop_assert_eq!(width(&shown), width(&line));
             for mode in [Entab::Never, Entab::OutsideQuotes, Entab::Everywhere]
             {
-                prop_assert_eq!(detab(&entab(&shown, mode)), shown.clone());
+                prop_assert_eq!(detab(&entab(&shown, retab(mode)), TAB_WIDTH), shown.clone());
             }
         }
     }

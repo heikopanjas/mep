@@ -12,10 +12,13 @@ From p. 98 and p. 20:
 - `Arg streamarg Ldelete` → STREAMARG (one line only, because BOXARG takes the multi-line shapes).
 - `Arg numarg Ldelete` (p. 20) → NUMARG, converted by the dispatcher to a linearg of n lines from the cursor line.
 - MARKARG (M2). MODIFIES. No TEXTARG.
+- `Argcol down/up Ldelete` → COLARG (project addition, argcol.md): a multi-line stream whose anchor line is trimmed to the anchor's column, every other line whole — this is the column-anchored "cut".
 - Not KEEPMETA. `Arg Arg` behaves like `Arg`.
 
 ## Behavior
 All forms put the deleted text into the clipboard with its shape, write it to the system clipboard (plan §3.3, §6.9) and rewrite `<clipboard>`. Read-only file: plan §5.6.
+
+This is the manual's own "cut": there is no separate cut command (and none is needed) because every form already copies before it deletes. A modern CUA-style keymap can bind `Ctrl+X` straight to `ldelete` (project addition, no new code).
 
 ### noarg
 Deletes the current line and puts it into the clipboard as one line (line shape) (p. 98). The cursor stays on the same line index and column (now on the following line). Cursor beyond the last line: the file is unchanged and the clipboard gets one empty line. ORACLE CMD-LDELETE-1. Returns true.
@@ -31,6 +34,9 @@ Deletes the box: on each line from the upper to the lower line, the cells from t
 
 ### streamarg (one line)
 Deletes the cells between the two positions on the line. Clipboard: stream (p. 22 "always treated as a stream"). Cursor: the left position. Returns true.
+
+### colarg (project addition, argcol.md)
+Same single-line path as streamarg when the anchor and cursor end up on one line. Otherwise, a flat delete of the column-anchored range: whichever of the anchor and cursor comes first in the file is trimmed to its own column onward, whichever comes second is trimmed up to its own column, every line strictly between them is whole and fully removed; clipboard as a stream with the same pieces `copy` would produce for the shape. Cursor: whichever end comes first in the file. Returns true.
 
 ### meta
 No meta form. Ignored and cleared.

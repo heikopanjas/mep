@@ -46,6 +46,9 @@ pub(crate) mod flags
     pub const MARKARG: u32 = 1 << 17;
     /// A marker argument is always a box
     pub const MARKBOX: u32 = 1 << 18;
+    /// Accepts a column-anchored selection (`argcol`, project addition): the anchor's line is
+    /// trimmed to its column, every other line in the selection is whole
+    pub const COLARG: u32 = 1 << 19;
 }
 
 use flags::*;
@@ -64,23 +67,24 @@ pub(crate) struct Desc
 
 const MOVE: u32 = CURSORFUNC;
 const WINDOW: u32 = NOARG | NULLARG | NUMARG | COUNT | WINDOWFUNC;
-const BLOCK: u32 = NOARG | NULLARG | LINEARG | BOXARG | STREAMARG | NUMARG | MARKARG | MODIFIES;
-const REPLACE: u32 = NOARG | NULLARG | LINEARG | BOXARG | STREAMARG | NUMARG | MARKARG | MARKBOX | MODIFIES;
+const BLOCK: u32 = NOARG | NULLARG | LINEARG | BOXARG | STREAMARG | NUMARG | MARKARG | MODIFIES | COLARG;
+const REPLACE: u32 = NOARG | NULLARG | LINEARG | BOXARG | STREAMARG | NUMARG | MARKARG | MARKBOX | MODIFIES | COLARG;
 const SEARCH: u32 = NOARG | NULLARG | NULLEOW | TEXTARG | BOXSTR;
 const INSERT: u32 = NOARG | MODIFIES;
 
 /// All built-in functions, sorted by name
 const TABLE: &[Desc] = &[
     Desc { name: "arg", flags: RAW | KEEPMETA, func: misc::arg },
+    Desc { name: "argcol", flags: RAW | KEEPMETA, func: misc::argcol },
     Desc { name: "argcompile", flags: NOARG, func: compile::argcompile },
-    Desc { name: "assign", flags: NULLARG | NULLEOL | TEXTARG | BOXSTR | LINEARG | BOXARG, func: misc::assign },
+    Desc { name: "assign", flags: NULLARG | NULLEOL | TEXTARG | BOXSTR | LINEARG | BOXARG | COLARG, func: misc::assign },
     Desc { name: "backtab", flags: MOVE, func: movement::backtab },
     Desc { name: "begfile", flags: MOVE, func: movement::begfile },
     Desc { name: "begline", flags: MOVE | TEXTEDIT, func: movement::begline },
     Desc { name: "cancel", flags: RAW, func: misc::cancel },
     Desc { name: "cdelete", flags: NOARG | MODIFIES | TEXTEDIT, func: edit::cdelete },
     Desc { name: "compile", flags: NOARG | NULLARG | TEXTARG | BOXSTR, func: compile::compile },
-    Desc { name: "copy", flags: NOARG | NULLARG | BOXARG | LINEARG | STREAMARG | TEXTARG | NUMARG | MARKARG, func: clipboard::copy },
+    Desc { name: "copy", flags: NOARG | NULLARG | BOXARG | LINEARG | STREAMARG | TEXTARG | NUMARG | MARKARG | COLARG, func: clipboard::copy },
     Desc { name: "curdate", flags: INSERT, func: misc::curdate },
     Desc { name: "curday", flags: INSERT, func: misc::curday },
     Desc { name: "curfile", flags: INSERT, func: misc::curfile },
@@ -93,7 +97,7 @@ const TABLE: &[Desc] = &[
     Desc { name: "emacsnewl", flags: NOARG | MODIFIES, func: edit::emacsnewl },
     Desc { name: "endfile", flags: MOVE, func: movement::endfile },
     Desc { name: "endline", flags: MOVE | TEXTEDIT, func: movement::endline },
-    Desc { name: "execute", flags: NULLARG | NULLEOL | TEXTARG | STREAMARG | LINEARG, func: misc::execute },
+    Desc { name: "execute", flags: NULLARG | NULLEOL | TEXTARG | STREAMARG | LINEARG | COLARG, func: misc::execute },
     Desc { name: "exit", flags: NOARG | NULLARG, func: files::exit },
     Desc { name: "graphic", flags: NOARG | MODIFIES | TEXTEDIT, func: edit::graphic },
     Desc { name: "help", flags: RAW, func: misc::not_available },
@@ -122,6 +126,7 @@ const TABLE: &[Desc] = &[
     Desc { name: "pword", flags: MOVE, func: movement::pword },
     Desc { name: "qreplace", flags: REPLACE, func: replace::qreplace },
     Desc { name: "quote", flags: NOARG | MODIFIES | TEXTEDIT, func: edit::quote },
+    Desc { name: "redo", flags: NOARG, func: edit::redo },
     Desc { name: "refresh", flags: NOARG | NULLARG, func: files::refresh },
     Desc { name: "replace", flags: REPLACE, func: replace::replace },
     Desc { name: "restcur", flags: MOVE, func: movement::restcur },
@@ -130,7 +135,7 @@ const TABLE: &[Desc] = &[
     Desc { name: "sdelete", flags: NOARG | NULLARG | STREAMARG | MARKARG | MODIFIES | TEXTEDIT, func: edit::sdelete },
     Desc { name: "setfile", flags: NOARG | NULLARG | TEXTARG | BOXSTR, func: files::setfile },
     Desc { name: "setwindow", flags: NOARG | NULLARG | WINDOWFUNC, func: movement::setwindow },
-    Desc { name: "shell", flags: NOARG | NULLARG | NULLEOL | TEXTARG | BOXSTR | LINEARG | BOXARG, func: shell::shell },
+    Desc { name: "shell", flags: NOARG | NULLARG | NULLEOL | TEXTARG | BOXSTR | LINEARG | BOXARG | COLARG, func: shell::shell },
     Desc { name: "sinsert", flags: NOARG | NULLARG | STREAMARG | MARKARG | MODIFIES | TEXTEDIT, func: edit::sinsert },
     Desc { name: "tab", flags: MOVE, func: movement::tab },
     Desc { name: "unassigned", flags: RAW | KEEPMETA, func: misc::unassigned },

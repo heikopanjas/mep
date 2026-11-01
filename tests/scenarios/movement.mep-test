@@ -237,6 +237,173 @@ backtab backtab
 backtab
 -- expect result false
 
+== name: tab indents every line of a pending selection, consuming it
+-- file a.txt
+alpha
+beta
+gamma
+-- args a.txt
+-- keys
+argcol down down tab
+-- expect file a.txt
+    alpha
+    beta
+    gamma
+-- expect cursor 0 0
+-- expect result true
+-- keys
+right right
+-- expect cursor 0 2
+
+== name: backtab outdents every line of a pending selection, consuming it
+-- file a.txt
+    alpha
+    beta
+    gamma
+-- args a.txt
+-- keys
+argcol down down backtab
+-- expect file a.txt
+alpha
+beta
+gamma
+-- expect cursor 0 0
+
+== name: tab rounds existing indentation up to the next tabstops multiple, not a flat add
+-- file a.txt
+  alpha
+beta
+-- args a.txt
+-- keys
+argcol right tab
+-- expect file a.txt
+    alpha
+beta
+
+== name: backtab on column 0 cannot outdent further
+-- file a.txt
+alpha
+beta
+-- args a.txt
+-- keys
+argcol down backtab
+-- expect file a.txt
+alpha
+beta
+-- expect cursor 0 0
+
+== name: tab indents a blank line in the selection to one full tabstop
+-- file a.txt
+one
+
+three
+-- args a.txt
+-- keys
+argcol down down tab
+down right
+-- expect result true
+
+== name: a selection on one line still gets indented
+-- file a.txt
+alpha
+-- args a.txt
+-- keys
+argcol right right tab
+-- expect file a.txt
+    alpha
+-- expect cursor 0 0
+
+== name: tabinsert makes tab insert spaces up to the next tab stop
+-- tools.ini
+[mep]
+tabinsert:
+-- file a.txt
+abc
+-- args a.txt
+-- keys
+right tab
+-- expect file a.txt
+a   bc
+-- expect cursor 0 4
+-- expect result true
+-- keys
+tab
+-- expect file a.txt
+a       bc
+-- expect cursor 0 8
+-- keys
+backtab
+-- expect file a.txt
+a       bc
+-- expect cursor 0 4
+
+== name: tabinsert makes backtab outdent when only blanks are left of the cursor
+-- tools.ini
+[mep]
+tabinsert:
+-- file a.txt
+      x
+	x
+-- args a.txt
+-- keys
+right right right right right right backtab
+-- expect file a.txt
+    x
+	x
+-- expect cursor 0 4
+-- expect result true
+-- keys
+backtab
+-- expect file a.txt
+x
+	x
+-- expect cursor 0 0
+-- keys
+backtab
+-- expect result false
+-- keys
+down right right right right right right right right backtab
+-- expect file a.txt
+x
+    x
+-- expect cursor 1 4
+
+== name: tabinsert backtab in virtual space only moves the cursor
+-- tools.ini
+[mep]
+tabinsert:
+-- file a.txt
+alpha
+-- args a.txt
+-- keys
+down right right right right right backtab
+-- expect result true
+-- expect cursor 1 4
+-- expect file a.txt
+alpha
+-- keys
+down tab
+-- expect result true
+-- expect cursor 2 8
+
+== name: tabinsert leaves a fresh arg tab as a movement
+-- tools.ini
+[mep]
+tabinsert:
+-- file a.txt
+alpha
+-- args a.txt
+-- keys
+arg tab
+-- expect cursor 0 4
+-- expect file a.txt
+alpha
+
+== name: plain arg tab without movement still just extends the selection
+-- keys
+arg tab
+-- expect cursor 0 4
+
 == name: tabstops switch
 -- tools.ini
 [mep]

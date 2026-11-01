@@ -35,6 +35,9 @@ Clears the text from the text cursor to the end of the text (M guide p. 19, item
 ### meta forms
 `meta` does not change what `arg` does. Meta stays set (KEEPMETA).
 
+### Column-anchored selection
+`argcol` (argcol.md, project addition) starts or continues arg mode exactly like `arg`, except a selection it starts is always a flat two-point stream (whichever end comes first in the file trimmed from its own column, whichever comes second trimmed up to its own column) instead of taking whole lines once movement makes `anchor.col == cursor.col`. A later plain `arg` press on a column-anchored selection does not turn the anchoring off; only `cancel`, consuming the selection, or starting a text argument do.
+
 ## Rejected arguments
 None. `arg` never returns false (Table 6.1 p. 50).
 

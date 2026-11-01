@@ -49,6 +49,18 @@ enterinsmode:
 arg "tabstops:2" assign tab
 -- expect cursor 0 2
 
+== name: a column-anchored selection assigns the anchor line's tail then the whole next line
+-- file a.txt
+xxtabstops:3
+noise:60
+-- args a.txt
+-- keys
+right right argcol down down assign
+-- expect result true
+-- keys
+tab
+-- expect cursor 2 3
+
 == name: assign textarg assigns a key
 -- keys
 arg "savecur:ctrl+b" assign

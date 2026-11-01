@@ -5,6 +5,7 @@ Source: M guide p. 108 (Table A.3), p. 61 (`askrtn`), p. 89 (Table A.1), p. 52 (
 
 ## Flags
 NOARG, NULLARG with NULLEOL, TEXTARG, BOXSTR, LINEARG, BOXARG, meta form. Not KEEPMETA.
+`Argcol down/up Shell` → COLARG (project addition, argcol.md): the column-anchored stream's rows (the anchor line's tail, then every whole line between it and the far end) become one command each, through the same trim/filter pass as `linearg`/`boxarg`.
 
 ## Running commands
 - The editor leaves full-screen mode, runs the commands on the terminal with the terminal's input and output, then returns and redraws the whole screen. Keys typed while a command runs go to the command.

@@ -1,5 +1,5 @@
 //! Editing functions (docs/spec/commands: graphic, insertmode, quote, cdelete, emacscdel,
-//! emacsnewl, sdelete, sinsert, ldelete, linsert, pbal, undo)
+//! emacsnewl, sdelete, sinsert, ldelete, linsert, pbal, undo, redo)
 
 use crate::{
     cells,
@@ -13,6 +13,52 @@ pub(crate) fn stream_clip(bytes: &[u8]) -> Clip
 {
     let lines = bytes.split(|byte| *byte == b'\n').map(|piece| piece.strip_suffix(b"\r").unwrap_or(piece).to_vec()).collect();
     Clip { shape: Shape::Stream, lines }
+}
+
+/// Returns the byte range of displayed line `line` that the stream `start..end` covers: from
+/// `start.col` on the first line, up to `end.col` on the last, whole in between (argcol.md)
+pub(crate) fn stream_window(shown: &[u8], line: usize, start: Pos, end: Pos) -> std::ops::Range<usize>
+{
+    let from = match line == start.line
+    {
+        | true => cells::byte_at(shown, start.col),
+        | false => 0
+    };
+    let to = match line == end.line
+    {
+        | true => cells::byte_at(shown, end.col),
+        | false => shown.len()
+    };
+    from..to.max(from)
+}
+
+/// Returns the displayed rows of the stream `start..end`, each trimmed by `stream_window`; rows
+/// beyond the end of the file are capped to one, matching the beyond-EOF rule other shapes use
+pub(crate) fn stream_rows(ed: &Editor, start: Pos, end: Pos) -> Vec<Vec<u8>>
+{
+    let cap = ed.line_count();
+    (start.line.min(cap)..=end.line.min(cap))
+        .map(|line| {
+            let shown = ed.shown_line(line);
+            shown[stream_window(&shown, line, start, end)].to_vec()
+        })
+        .collect()
+}
+
+/// Inserts blank space for the stream `start..end`: a line break per line crossed, then
+/// enough spaces to cover the last line's columns, at `start`
+fn insert_stream(ed: &mut Editor, start: Pos, end: Pos)
+{
+    let at = ed.prepare(start);
+    let mut blanks = ed.newline().repeat(end.line - start.line);
+    let columns = match end.line == start.line
+    {
+        | true => end.col - start.col,
+        | false => end.col
+    };
+    blanks.extend(b" ".repeat(columns));
+    ed.replace(at..at, &blanks);
+    ed.set_cursor(start);
 }
 
 /// `graphic`: puts the typed character at the cursor (graphic.md)
@@ -44,6 +90,14 @@ pub(crate) fn quote(_: &mut Editor, _: Arg) -> Step
 pub(crate) fn undo(ed: &mut Editor, _: Arg) -> Step
 {
     ed.undo_step();
+    Step::Done(true)
+}
+
+/// `redo`: reapplies the last change `undo` undid (redo.md)
+// ORACLE: REDO-1
+pub(crate) fn redo(ed: &mut Editor, _: Arg) -> Step
+{
+    ed.redo_step();
     Step::Done(true)
 }
 
@@ -195,19 +249,7 @@ pub(crate) fn sinsert(ed: &mut Editor, arg: Arg) -> Step
             ed.replace(at..at, newline);
             ed.set_cursor(pos);
         }
-        | Arg::Stream { start, end, .. } =>
-        {
-            let at = ed.prepare(start);
-            let mut blanks = ed.newline().repeat(end.line - start.line);
-            let columns = match end.line == start.line
-            {
-                | true => end.col - start.col,
-                | false => end.col
-            };
-            blanks.extend(b" ".repeat(columns));
-            ed.replace(at..at, &blanks);
-            ed.set_cursor(start);
-        }
+        | Arg::Stream { start, end, .. } => insert_stream(ed, start, end),
         | _ =>
         {
             let cursor = ed.cursor();
@@ -296,7 +338,7 @@ pub(crate) fn ldelete(ed: &mut Editor, arg: Arg) -> Step
             ed.set_cursor(Pos::new(top, left));
             Clip { shape: Shape::Box { width: right - left }, lines: rows }
         }
-        | Arg::Stream { start, end, .. } =>
+        | Arg::Stream { start, end, .. } if start.line == end.line =>
         {
             let rows = delete_box(ed, start.line, start.line, start.col, end.col);
             ed.set_cursor(start);
@@ -304,6 +346,15 @@ pub(crate) fn ldelete(ed: &mut Editor, arg: Arg) -> Step
                 shape: Shape::Stream,
                 lines: rows.into_iter().map(|row| row[..row.iter().rposition(|byte| *byte != b' ').map_or(0, |last| last + 1)].to_vec()).collect()
             }
+        }
+        | Arg::Stream { start, end, .. } =>
+        {
+            let from = ed.prepare(start);
+            let to = ed.clamped_offset(end);
+            let removed = ed.bytes(from..to);
+            ed.replace(from..to, b"");
+            ed.set_cursor(start);
+            stream_clip(&removed)
         }
         | _ => match cursor.line < ed.length()
         {
@@ -362,11 +413,7 @@ pub(crate) fn linsert(ed: &mut Editor, arg: Arg) -> Step
             insert_box(ed, top, bottom, left, right - left);
             ed.set_cursor(Pos::new(top, left));
         }
-        | Arg::Stream { start, end, .. } =>
-        {
-            insert_box(ed, start.line, start.line, start.col, end.col - start.col);
-            ed.set_cursor(start);
-        }
+        | Arg::Stream { start, end, .. } => insert_stream(ed, start, end),
         | _ =>
         {
             if cursor.line < ed.length()
@@ -439,12 +486,13 @@ pub(crate) fn pbal(ed: &mut Editor, arg: Arg) -> Step
     };
     let line = ed.file().text.line_of(offset);
     let raw = ed.file().text.line(line);
-    let col = cells::col_at(&raw, offset - ed.line_start(line));
+    let tab = ed.switches.tab_width();
+    let col = cells::width(&cells::detab(&raw[..offset - ed.line_start(line)], tab));
     ed.highlight = Some((Pos::new(line, col), 1));
     let view = ed.view();
     if line < view.top || line >= view.top + ed.height()
     {
-        ed.info(&String::from_utf8_lossy(&cells::detab(&raw)));
+        ed.info(&String::from_utf8_lossy(&cells::detab(&raw, tab)));
     }
     if ed.meta == false
     {

@@ -10,6 +10,7 @@ From the syntax lines on p. 97:
 - `Arg streamarg Execute` → STREAMARG. STREAMARG accepts any cursor movement (M guide p. 73), so a multi-line box-shaped selection arrives as a stream; line breaks inside it separate items like spaces.
 - `Arg linearg Execute` → LINEARG: the text of all lines, joined with spaces.
 - No NOARG, no BOXARG, no NUMARG (numeric text is a textarg: `arg "5" execute` fails as an unknown function).
+- `Argcol down/up Execute` → COLARG (project addition, argcol.md): reaches `execute` as the same multi-line `Arg::Stream` STREAMARG already handles, so no new code was needed; line breaks inside the column-anchored range still separate items like spaces.
 - Not KEEPMETA. Not MODIFIES itself; the executed functions modify as they do.
 - `Arg Arg` has no special meaning.
 

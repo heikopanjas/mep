@@ -4,6 +4,120 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.18.0, usetabs switch and a re-save fix)
+
+- added a `usetabs` boolean switch (project addition, default off, switches.md, oracle tab-1): the file tab width becomes `tabstops` instead of 8 for display and re-tabbing, and the leading blanks of edited lines are always saved as tabs, one per `tabstops` columns, whatever `entab` says; inner runs still follow `entab`
+- rationale: the owner wanted a setting for inserting tabs instead of spaces. Editing stays on spaces (plan §5.2 detabs a line before every edit), so tabs are produced on save; the owner chose a tab width that follows `tabstops`, so a file saved with one tab per indent level reopens at the width it was typed
+- cells.rs: `layout(line, tab)` lays out raw file lines with a given tab width; `glyphs` stays for displayed lines, which have no tabs; `detab` takes the tab width; `entab` takes a `Retab` (mode, tab width, leading-tabs flag), which `Switches::retab()` builds and which replaces `entab_mode()`; only the four places that handle raw lines (shown line, detab before edit, drawing, bracket match column) and saving pass the width
+- fixed a save bug that predates this work and that `usetabs` made obvious: a successful save cleared every line's edited flag although the buffer still held the unconverted form (spaces, trailing blanks), so a second save wrote lines byte-exact and undid the first save's re-tabbing and trimming. Lines now stay edited from loading on, which keeps saving idempotent; removed the then unused `clear_edited`
+- added scenarios for tab display width, leading tabs on save, `tabinsert` plus `usetabs`, and a second save; unit tests for `layout`/`detab` at width 4 and leading-blank re-tabbing
+- verified with the real binary: tab tab and save wrote two tab bytes; indenting the next line and saving again kept the first line's tabs
+- set `nousetabs:` (the default) in the owner's tools.ini and examples/tools.ini, since their `entab:0` suggests they keep spaces
+- scripts/check.sh passes: fmt, clippy, full test suite, 100% coverage
+- no version bump: part of the same uncommitted v0.18.0 work
+
+### 2026-11-01 (v0.18.0, tabinsert replaces tabindent)
+
+- replaced the `tabindent` switch from the previous entry with `tabinsert` (project addition, default off, switches.md, oracle cmd-tab-1) after the owner clarified what they wanted: tab should insert at the cursor, not indent the whole line
+- with `tabinsert:` and no arg pending, `tab` inserts spaces at the cursor up to the next `tabstops` multiple; `backtab` removes the blanks back to the previous multiple if only spaces or tabs are left of the cursor, and otherwise (text on the left, or column 0) moves as before. Blanks beyond the end of the line are virtual, so there backtab only moves
+- the block indent/outdent of a pending selection is unchanged, and a fresh `arg tab` still moves
+- a setting for saving indentation as real tab characters is still open: the owner chose tabs written on save, but file tabs always display 8 wide (oracle tab-1), so one tab per `tabstops:4` columns would not reopen at the width it was typed; asked the owner before going further
+- `tabindent` never shipped (uncommitted), so it was renamed outright with no compatibility alias; the owner's tools.ini and examples/tools.ini now set `tabinsert:`
+- verified with the real binary on "foo bar": two tabs then backtab left 4 leading spaces, tab mid-line padded to column 12, backtab after text only moved the cursor
+- scripts/check.sh passes: fmt, clippy, full test suite, 100% coverage
+- no version bump: part of the same uncommitted v0.18.0 work
+
+### 2026-11-01 (v0.18.0, tabindent switch)
+
+- added a `tabindent` boolean switch (project addition, default off, switches.md, oracle cmd-tab-1): with it on and no arg pending, `tab` indents and `backtab` outdents the cursor line instead of moving the cursor, rounding the line's leading blanks to the next or previous `tabstops` multiple, with the cursor moving along with the text
+- default off keeps the manual's pure cursor movement; the owner asked for it as a tools.ini setting, and it is now on in their tools.ini and in examples/tools.ini
+- a fresh `arg` with no movement still moves the cursor, so `arg tab` keeps building a selection; `backtab` returns false when the line has no leading blanks; below the end of the file `tab` creates the line, `backtab` does nothing
+- `tab`/`backtab` now share one `tab_key` helper in commands/movement.rs, and `reindent` works one line at a time and returns the old and new width so the cursor can follow
+- fixed before it shipped: an outdent below the end of the file asked for the start of a line that does not exist and panicked; outdent now only touches a line that has blanks to remove
+- verified with the real binary: on "  beta" with the cursor on the e, tab gave "    beta" with the cursor still on the e
+- scripts/check.sh passes: fmt, clippy, full test suite, 100% coverage
+- no version bump: part of the same uncommitted v0.18.0 work
+
+### 2026-11-01 (v0.18.0, word selection macros and tab/backtab block indent)
+
+- added `Selectmword:=Argcol Mword` / `Selectmword:Shift+Ctrl+Left` and `Selectpword:=Argcol Pword` / `Selectpword:Shift+Ctrl+Right` to the owner's tools.ini and examples/tools.ini, for select-by-word. Unlike the earlier `Shift+Left`/`Shift+Right` character-selection macros, `mword`/`pword` can cross line boundaries, so plain `Arg Mword`/`Arg Pword` would risk a box selection (not a flowing text range) whenever a word jump lands on a different column on a different line, since commands like `copy` have `boxarg`. Used `Argcol` instead, which always returns the correct flat stream whenever the anchor and cursor are on different lines, regardless of column; verified against the real binary for both the same-line and cross-line, mismatched-column cases
+- gave `tab`/`backtab` a new behavior (project addition, not in the 1988 manual, oracle cmd-tab-1): pressing either while a selection is already pending (anchor differs from the cursor, built any way at all) now indents/outdents every selected line instead of moving to the next/previous tab stop, rounding each line's own leading whitespace to the next/previous `tabstops` multiple, then ends the selection and puts the cursor at column 0 of the first line
+- both commands are `cursorfunc`, so the dispatcher always routes them straight to the cursor-move/selection-extend path and never through `classify()`; the new behavior had to be implemented as a direct check inside `tab`/`backtab` themselves (`self.arg`'s anchor vs. the cursor) rather than through the usual arg-kind flag mechanism, since there's no flag that changes cursorfunc's dispatch routing
+- accepted tradeoff, discussed with the owner beforehand: using `tab`/`backtab` themselves as one of the movement keys while actively building a selection (e.g. `arg right tab tab copy`) stops extending past the first press once the selection is non-trivial, since the next press now consumes it instead
+- added `reindent`/`selected_lines` helpers in commands/movement.rs; updated tab.md, backtab.md, implementation_plan.md and oracle.md; added scenario coverage in movement.mep-test (indent, outdent, rounding from a non-multiple, outdent at column 0, a blank line in the selection, a single-line selection, and the existing plain `arg tab` no-selection case as a regression guard)
+- re-verified against the real binary: `shift+down shift+down tab` indents all three lines of a file to 4 spaces, re-selecting and pressing `shift+tab` outdents back to the exact original content
+- scripts/check.sh passes: fmt, clippy, full test suite, 100% coverage
+- version bump: 0.17.0 to 0.18.0 (minor - new command behavior, backward compatible)
+
+### 2026-11-01 (v0.17.0, character selection macros and an argcol geometry fix, 23:50)
+
+- added `Selectleft:=Arg Left` / `Selectleft:Shift+Left` and `Selectright:=Arg Right` / `Selectright:Shift+Right` to the owner's tools.ini and examples/tools.ini, for character-by-character selection. No code change: `left`/`right` never change the cursor's line, so a selection built purely from them always hits the existing same-line case, which is already a proper character-range (streamarg) selection; verified against the real binary in both directions
+- corrected argcol's geometry after the owner worked through a concrete example (cursor at line5 col7, one shift+down): the far end of the selection (wherever the cursor currently is) was wrongly treated as a whole line; it should be trimmed to the cursor's own column too, exactly mirroring how the anchor's own line is trimmed. The corrected rule is symmetric and direction-agnostic: whichever of the anchor and cursor comes first in the file is trimmed from its own column onward, whichever comes second is trimmed up to its own column, everything strictly between is whole
+- this simplified the implementation rather than complicating it: `selection()`'s argcol branch in editor.rs collapses to returning the plain two-point stream already computed at the top of the function (no more snapping the far end to column 0); `render.rs`'s live highlight simplified the same way, with no direction-dependent branching left; `stream_window`/`stream_rows`/`insert_stream` and every command's multi-line stream arm needed no changes at all, since they only ever consumed whatever `start`/`end` they were given
+- this also proved `sdelete`/`sinsert` never needed the `colarg` flag at all: lacking `linearg`, they already fall back to the exact same flat stream for any multi-line movement regardless of `argcol`, so granting them `colarg` was a no-op; removed it from both in cmd.rs
+- updated argcol.md, the per-command notes in copy.md/ldelete.md/linsert.md/sdelete.md/sinsert.md/arg.md, oracle.md's cmd-argcol-1 row, and implementation_plan.md's note to describe the corrected geometry; rewrote select.mep-test's expectations and added a render.rs unit test case plus a scenario case (a selection whose topmost line isn't at the top of the file/window) to close two coverage gaps the fix and the simplification each opened
+- re-verified against the real binary with a corrected test paragraph (the earlier one happened to have a short third line that coincidentally clamped to the old, wrong answer): selecting from column 28 down two lines now correctly stops mid-line-three instead of taking it whole
+- scripts/check.sh passes: fmt, clippy, full test suite, 100% coverage
+- no version bump: still the same uncommitted v0.17.0 work, corrected before ever being committed
+
+### 2026-11-01 (v0.17.0, argcol and a column-anchored selection, 23:30)
+
+- added a real `argcol` command (project addition, no manual equivalent, docs/spec/commands/argcol.md, oracle cmd-argcol-1) after discussing the earlier shift+down/shift+up macros' whole-line limitation with the owner for their real use case: selecting a sentence that wraps across lines in the middle of a paragraph
+- `argcol` starts/continues arg mode exactly like `arg` (same anchor/count-keeping rules) but never raises the count itself, and marks the pending state (`ArgState` gained a `col: bool`) so a selection built from it keeps the anchor's column instead of becoming a whole-line selection: the anchor's line is trimmed to the anchor's column (tail going down, head going up), every other line between the anchor and wherever the cursor currently is comes in whole, and the cursor's own line is not part of it yet; pressing the matching movement again extends it by exactly one more whole line; reversing direction recomputes cleanly since nothing but the live anchor and cursor is used
+- this is a dedicated new function rather than a change to plain `arg`/`down`/`up`, and is gated by a new `colarg` flag added to the ten commands that already take linearg/boxarg/streamarg (assign, copy, execute, ldelete, linsert, qreplace, replace, sdelete, shell, sinsert): ordinary `arg down`/`arg up` selections, numeric-count selections and marker selections are all completely unaffected, since they either never reach this code path or explicitly opt out of the new marker
+- the column-anchored shape needed no new `arg` variant at all: it is carried as an ordinary `arg::stream`, the same type `sdelete`/`sinsert`/`execute`/`replace`'s `span::stream` already use for flat multi-line ranges, so those five needed zero code changes once granted the flag; `copy`, `ldelete` (cut), `linsert` and `assign`/`shell` gained a new multi-line stream arm each; `edit.rs` gained shared `stream_window`/`stream_rows` helpers (and `insert_stream`, factored out of `sinsert` and reused by `linsert`), and `replace.rs`'s `span::window` now delegates to `stream_window` instead of duplicating the same trim rule
+- `render.rs`'s live selection highlight (`hgcolor`) was taught the same geometry so what's drawn always matches what a command would actually act on
+- owner's decisions along the way: sdelete/sinsert honor the new shape (so a deletion/insertion always matches the highlight); linsert is the exact inverse of the matching deletion; a downward copy includes the trailing line break; a command without colarg falls back to today's behavior unchanged
+- updated the owner's tools.ini and examples/tools.ini: `Selectdown`/`Selectup` macro bodies changed from `Arg Down`/`Arg Up` to `Argcol Down`/`Argcol Up`, key bindings (shift+down/shift+up) unchanged
+- verified against the real binary, not just scenario tests: opened a wrapped three-line paragraph, moved the cursor to the start of a mid-line sentence, pressed shift+down twice, copied, and saved the clipboard to a real file — got exactly that sentence's tail plus the next whole line, matching the design exactly (including the known, accepted oversell of also grabbing the next sentence's start on that second whole line)
+- scripts/check.sh passes: fmt, clippy, the full workspace test suite including new scenario cases in select.mep-test and additions to arg.mep-test/edit.mep-test/config.mep-test/shell.mep-test, and the coverage gate at 100% lines/functions/regions/branches; getting there took real iteration (adding a scenario left the selection pending across a frame check for the "up" direction specifically, since `highlighted()` is a function the scenario harness calls and per the project's own coverage-across-binaries rule must be fully covered by scenarios, not patched over by unit tests alone)
+- fixed a second accidental loss of the `<!-- {changelog} -->` marker line in this file during this session's editing; restored it again, this time double-checked
+- version bump: 0.16.0 to 0.17.0 (MINOR - new command, new flag, backward compatible)
+
+### 2026-11-01 (v0.16.0, shift+down and shift+up line-selection macros, 22:30)
+
+- added `Selectdown:=Arg Down` / `Selectdown:Shift+Down` and `Selectup:=Arg Up` / `Selectup:Shift+Up` to the owner's tools.ini and to examples/tools.ini, for GUI-style growable line selection
+- these are plain macros, no new code: `arg` run again while a selection is already pending keeps the anchor and extends it rather than resetting (oracle cmd-arg-2, already implemented), and a cursor function like `down`/`up` does not consume the pending arg (editor.rs's dispatch only clears `self.arg` for non-cursorfunc functions), so repeated shift+down/shift+up keep extending the same selection; any other key in between ends it, and the next shift+down starts fresh
+- this is not quite what was asked for literally: mep's selection model only has four shapes (none, one-line stream, whole lines, box) and pure vertical movement always classifies as whole lines (editor.rs's `selection()`: same column = linearg), so the first shift+down selects the whole current line plus the next line, not "cursor position to end of line" as a partial first line; there is also no live visual highlight while the selection grows (the 1988 model only highlights the arg anchor itself, hgcolor, not a dynamic extent), so the only feedback is the cursor moving until a command like copy consumes the selection
+- verified against the real binary (not just reasoned about): two shift+down presses then ctrl+c on a 5-line file, then `arg arg "file" setfile` to save the clipboard to a real file, produced exactly the first three lines
+- no version bump: tools.ini macros only, no code changed
+
+### 2026-11-01 (v0.16.0, redo implemented, the cut spec from the prior entry was a mistake, 22:00)
+
+- correction to the prior entry (21:00): docs/spec/commands/cut.md and oracle cut-1 were wrong and have been deleted. `ldelete` already is the manual's cut: p. 98 and ldelete.md already say every form copies the deleted text to the clipboard with its shape before removing it, for exactly the noarg/nullarg/linearg/boxarg/streamarg/numarg shapes a cut needs. No new command was ever needed; added a note to ldelete.md so this is not missed again
+- implemented `redo` per redo.md and oracle redo-1: `Group` (editor.rs) gained an `after: Pos` field sealed in `begin_command` once a command finishes (for the file actually being viewed; a second file an extension also touched in the same command keeps `after` defaulted to its own `cursor`, same as before); `FileState` gained a `redo: Vec<Group>` stack; `undo_step` now pushes the popped group onto `redo`; the new `redo_step` reapplies a group's edits forward, sets the cursor to `after`, marks the file modified (undo deliberately leaves `modified` alone per oracle cmd-undo-1, but redo moving forward past a save point needs it set, or a save after undo then redo would leave `modified` false while the buffer no longer matches disk) and pushes the group back onto `undo`; any real edit through `replace` (not `redo` itself, which bypasses it) clears `redo`; the two existing `undo.clear()` sites (reread in files.rs, `fill_pseudo` in info.rs) now also clear `redo`
+- registered `redo` in cmd.rs (noarg only, no modifies flag, matching how `undo` itself is classified) and added scenario tests in tests/scenarios/edit.mep-test and files.mep-test (redo after undo, redo of a deleted line, three steps back and forward, a new edit clearing the redo stack, undo/redo toggling, the undocount bound applying to redo too, redo with nothing to redo, `arg redo` rejected, and refresh clearing a pending redo)
+- fixed the owner's personal tools.ini (~/.config/mep/tools.ini): ctrl+x now binds `ldelete` (real cut, using the existing command) instead of the nonexistent `cut`; ctrl+y now binds the new `redo` instead of `ldelete`'s old binding there; synced examples/tools.ini in the repo to match (per agents.md, it is the owner's working configuration), including the extmake:c gcc line
+- scripts/check.sh passes: fmt, clippy with -D warnings, the full workspace test suite including the new scenarios, and the coverage gate at 100% lines/functions/regions/branches; cargo-llvm-cov was not installed in this session's sandbox and had to be installed first
+- version bump: 0.15.2 to 0.16.0 (MINOR - new `redo` command)
+
+### 2026-11-01 (v0.15.2, cut and redo specs for a cua keymap, 21:00)
+
+- the owner asked for a modern cua keymap in their own tools.ini (copy ctrl+c, cut ctrl+x, paste ctrl+v, undo ctrl+z, redo ctrl+y) instead of mep's 1988 defaults
+- copy, paste and undo are rebinds of existing commands, applied directly to the owner's tools.ini; cut and redo do not exist in mep at all (the 1988 manual has neither, and undo.md already flagged redo's wording in implementation_plan.md §8 task 12 as needing the owner's confirmation)
+- wrote docs/spec/commands/cut.md and redo.md (project additions, oracle cut-1 and redo-1 in docs/oracle.md) per the spec-then-tests-then-code rule; cut is its own command rather than a copy+delete macro because arg mode consumes the selection after the first function, so a macro would copy the right shape but delete only the current line; redo needs a cursor-after field added to editor.rs's Group struct (currently only stores cursor-before, which is all undo needs) — left as an implementation note, not yet coded
+- the owner's personal tools.ini (~/.config/mep/tools.ini, not the repo's examples/tools.ini) now has copy:ctrl+c, paste:ctrl+v and undo:ctrl+z added; this dropped ppage:ctrl+c (ppage keeps pgdn), insertmode:ctrl+v (insertmode keeps ins) and plines:ctrl+z (plines now has no key) by the owner's choice; ctrl+x and ctrl+y are untouched (still down and ldelete) until cut and redo are implemented
+- no version bump: documentation only, no code changed yet
+
+### 2026-11-01 (v0.15.2, ghostty eats copy and paste keys, 20:00)
+
+- the owner's copy and paste did not work in ghostty on linux, even within a single mep window; ghostty +show-config --default shows it binds ctrl+insert to copy_to_clipboard:mixed and shift+insert to paste_from_selection itself, so neither key reaches mep; freeing both with keybind = ctrl+insert=unbind and keybind = shift+insert=unbind is the fix
+- rationale: this is the same class of problem as the cmd+c/cmd+v note already in agents.md: ghostty's own default keybinds claim a key before mep's terminal input ever sees it
+- separately, an automated two-process test (arg, down, down, copy, then a fresh process pasting) confirmed the real wayland system clipboard round-trip for a line-shaped selection works correctly end to end once the right keys reach mep
+- no version bump: documentation only
+
+### 2026-11-01 (v0.15.2, shell verified on linux, 19:30)
+
+- the owner ran shell by hand on linux: noarg shell saves and drops to the interactive shell, meta shell skips the save, arg shell on ls -l and on a failing ls /does-not-exist both ran correctly, ctrl+c during arg shell on ping localhost returned cleanly, and a line selection of two echo commands ran each in order
+- the pending item for shell by hand on linux is done; m4's manual shell and compile checks are now closed on windows and linux, only the shift+f3 kitty-protocol gap on linux and macos stays open under m4
+- no version bump: documentation only
+
+### 2026-11-01 (v0.15.2, compile verified on linux, 19:00)
+
+- the owner ran compile by hand on linux with extmake:c gcc -fsyntax-only %s; arg compile shows the compile errors in the editor, gcc's filename:row:column: message form parses correctly (oracle compile-1)
+- the pending item for compile by hand on linux is done; shell by hand on linux stays open
+- no version bump: documentation only
+
 ### 2026-11-01 (v0.15.2, compile verified on windows, 18:30)
 
 - the owner ran compile by hand on windows with extmake:c clang -fsyntax-only %s from a TOOLS.INI in %APPDATA%\mep; arg compile shows the compile errors in the editor

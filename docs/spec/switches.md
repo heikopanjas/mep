@@ -37,9 +37,19 @@ Numeric ranges: the manual gives no ranges. Unless a section says otherwise, a n
 ## tabstops
 - Type: numeric. Default: 4 (M guide p. 60).
 - Values: 1–255 (0 has no meaning; project choice).
-- Effect: distance between the logical tab stops used by `tab` and `backtab` (p. 93, p. 109). It does not change how tab characters in the file are displayed (8 cells, plan §5.2, ORACLE TAB-1).
+- Effect: distance between the logical tab stops used by `tab` and `backtab` (p. 93, p. 109). It does not change how tab characters in the file are displayed (8 cells, plan §5.2, ORACLE TAB-1), unless `usetabs` is on.
 - M1: yes.
 - Tests: default: `tab` from 0 → 4; `tabstops:8` → 8; `tabstops:0` and `tabstops:four` → error, unchanged.
+
+## usetabs
+- Type: Boolean. Default: off. Project addition: not in the 1988 manual. ORACLE TAB-1.
+- Effect: the file tab width becomes `tabstops` instead of 8: tab characters in the file display to the next multiple of `tabstops`, and edited lines are re-tabbed at that width on save. The leading blanks of an edited line are always saved as tabs, one per `tabstops` columns with any rest as spaces, whatever `entab` says; inner runs of spaces still follow `entab`. Editing works on spaces as before (plan §5.2), so `tab` with `tabinsert` inserts spaces that become tabs on disk.
+- Tests: default: a file tab is 8 wide; `usetabs:` → "\tx" shows x at column 4; an edited line with 5 leading spaces and `entab:0` saves as tab, space; `tabinsert:` + `usetabs:` → two tabs typed save as two tab characters; `usetabs:x` → error, unchanged.
+
+## tabinsert
+- Type: Boolean. Default: off. Project addition: not in the 1988 manual. ORACLE CMD-TAB-1.
+- Effect: with no arg pending, `tab` inserts spaces at the cursor up to the next multiple of `tabstops` and moves the cursor there, instead of only moving. `backtab` removes the blanks back to the previous multiple of `tabstops` if only blanks (spaces or tabs) are left of the cursor, moving the cursor with them; with text left of the cursor, or at column 0, it moves as without the switch. Blanks beyond the end of the line are virtual, so there `backtab` only moves. Tabs in the line become spaces first, as for every edit (plan §5.2). A pending selection is indented or outdented whatever this switch says (tab.md); a fresh `arg` with no movement yet still moves the cursor, so `arg tab` keeps building a selection.
+- Tests: default off: `tab` moves; `tabinsert:` → `tab` on "abc" at column 1 gives "a   bc", cursor 4; `backtab` there moves to 4 without editing (text on the left); "      x" at column 6 → `backtab` gives "    x", cursor 4; a tab left of the cursor is outdented; `backtab` in virtual space only moves; `arg tab` moves; `tabinsert:x` → error, unchanged.
 
 ## tabdisp
 - Type: numeric. Default: 32, a space (M guide p. 60).
@@ -51,7 +61,7 @@ Numeric ranges: the manual gives no ranges. Unless a section says otherwise, a n
 ## entab
 - Type: numeric. Default: 1 (M guide p. 59; plan §5.2).
 - Values: 0, 1, 2. Anything else is invalid.
-- Effect when an edited line is written (unedited lines are written byte-exact, plan §5.2): 0 = no tabs, white space stays spaces; 1 = runs of several spaces outside quoted strings (quotes `"` or `'`, per the Z guide) become tabs; 2 = all runs of several spaces become tabs (p. 59). Tab positions use the file tab width 8. ORACLE TAB-1.
+- Effect when an edited line is written (unedited lines are written byte-exact, plan §5.2): 0 = no tabs, white space stays spaces; 1 = runs of several spaces outside quoted strings (quotes `"` or `'`, per the Z guide) become tabs; 2 = all runs of several spaces become tabs (p. 59). Tab positions use the file tab width: 8, or `tabstops` with `usetabs`. A line stays edited after a save, since the buffer keeps its unconverted form; every save converts it again. ORACLE TAB-1.
 - M1: yes.
 - Tests: default 1: edited line `a        "x   y"` saved with a tab before the quote and spaces inside it; `entab:0` → no tabs; `entab:2` → tabs inside the quotes too; `entab:3` → error, unchanged.
 

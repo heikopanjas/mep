@@ -354,7 +354,10 @@ pub(crate) struct ArgState
 {
     pub(crate) count:  usize,
     pub(crate) anchor: Pos,
-    pub(crate) text:   Option<TextArg>
+    pub(crate) text:   Option<TextArg>,
+    /// Set by `argcol`: a selection built from this state keeps the anchor's column
+    /// instead of taking whole lines (project addition, argcol.md)
+    pub(crate) col:    bool
 }
 
 /// One editing change for undo
@@ -370,7 +373,11 @@ pub(crate) struct Edit
 #[derive(Debug, Clone)]
 pub(crate) struct Group
 {
+    /// Cursor before the command ran, restored by `undo`
     pub(crate) cursor: Pos,
+    /// Cursor after the command ran, restored by `redo`; sealed in `begin_command` once the
+    /// command finishes, defaulting to `cursor` until then
+    pub(crate) after:  Pos,
     pub(crate) edits:  Vec<Edit>
 }
 
@@ -387,7 +394,10 @@ pub(crate) struct Window
 pub(crate) struct FileState
 {
     pub(crate) view: View,
-    pub(crate) undo: Vec<Group>
+    pub(crate) undo: Vec<Group>,
+    /// Steps undone from `undo`, reapplied by `redo`; cleared by any edit that is not itself a
+    /// `redo` (plan: `redo.md`)
+    pub(crate) redo: Vec<Group>
 }
 
 /// A running macro
@@ -694,9 +704,19 @@ impl Editor
     /// Starts a new top-level command: new undo step, cleared message
     fn begin_command(&mut self, key: Option<Key>)
     {
+        // The command that just finished left the cursor where `redo` should put it back.
+        let after = self.cursor();
+        let current = self.current;
+        for file in std::mem::take(&mut self.undo_files)
+        {
+            if file == current &&
+                let Some(group) = self.state_of(file).undo.last_mut()
+            {
+                group.after = after;
+            }
+        }
         self.before = Some((self.active, self.current, self.view()));
         self.goto = None;
-        self.undo_files.clear();
         self.highlight = None;
         self.message = None;
         self.last_key = key;
@@ -998,6 +1018,7 @@ impl Editor
             // A typed character starts a text argument; a pending selection is dropped (CMD-ARG-2).
             arg.anchor = cursor;
             arg.text = Some(TextArg { chars: vec![typed], cursor: 1 });
+            arg.col = false;
             Step::Done(true)
         }
         else if flags & flags::RAW != 0 || (flags & flags::CURSORFUNC != 0 && text_active == false)
@@ -1050,7 +1071,7 @@ impl Editor
                 return match has(flags::MARKBOX)
                 {
                     | true => Some(Arg::Box { count, top, bottom, left, right }),
-                    | false => self.selection(flags, count, mark, cursor)
+                    | false => self.selection(flags, count, mark, cursor, false)
                 };
             }
             let number = text.parse::<usize>().ok().filter(|_| has(flags::NUMARG) && text.bytes().all(|byte| byte.is_ascii_digit()));
@@ -1088,11 +1109,13 @@ impl Editor
                 }
             );
         }
-        self.selection(flags, count, anchor, cursor)
+        self.selection(flags, count, anchor, cursor, state.col)
     }
 
-    /// Classifies the selection from `anchor` to `cursor`
-    fn selection(&self, flags: u32, count: usize, anchor: Pos, cursor: Pos) -> Option<Arg>
+    /// Classifies the selection from `anchor` to `cursor`; `col` marks an `argcol` selection,
+    /// which is always a flat stream rather than whole lines when `anchor`/`cursor` share a
+    /// column (argcol.md)
+    fn selection(&self, flags: u32, count: usize, anchor: Pos, cursor: Pos, col: bool) -> Option<Arg>
     {
         let has = |flag: u32| flags & flag != 0;
         let (start, end) = (anchor.min(cursor), anchor.max(cursor));
@@ -1115,6 +1138,10 @@ impl Editor
             {
                 has(flags::BOXARG).then_some(block)
             }
+        }
+        else if col && has(flags::COLARG)
+        {
+            Some(stream)
         }
         else if anchor.col == cursor.col
         {

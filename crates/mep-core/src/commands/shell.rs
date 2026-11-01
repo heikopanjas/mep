@@ -27,6 +27,8 @@ pub(crate) fn shell(ed: &mut Editor, arg: Arg) -> Step
                 String::from_utf8_lossy(&shown[cells::box_range(&shown, left, right)]).into_owned()
             })
             .collect(),
+        | Arg::Stream { start, end, .. } =>
+            crate::commands::edit::stream_rows(ed, start, end).into_iter().map(|row| String::from_utf8_lossy(&row).into_owned()).collect(),
         | other => vec![other.into_text()]
     };
     let commands: Vec<String> = commands.iter().map(|command| command.trim_end().to_string()).filter(|command| command.is_empty() == false).collect();

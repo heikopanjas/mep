@@ -4,7 +4,7 @@ Default keys: Ctrl+L
 Source: M guide p. 106 (Table A.3), p. 34 (Ch. 4.4.2), p. 88 (Table A.1), p. 52 (Table 6.1); z-vs-mep.md S6; IMPLEMENTATION_PLAN.md §6.5, §8 M2, §10, §11 (ORACLE S6)
 
 ## Flags
-NOARG and NULLARG (identical, p. 34), LINEARG, BOXARG, STREAMARG, NUMARG (converted to a linearg), MARKARG (always a box, ORACLE S6). Count 2 (`Arg Arg`) selects regular expressions for every form. MODIFIES.
+NOARG and NULLARG (identical, p. 34), LINEARG, BOXARG, STREAMARG, NUMARG (converted to a linearg), MARKARG (always a box, ORACLE S6), COLARG (project addition, argcol.md). Count 2 (`Arg Arg`) selects regular expressions for every form. MODIFIES.
 
 ## Behavior
 
@@ -17,6 +17,7 @@ The dialog line asks for the search string and then the replacement string, each
 - streamarg: from the earlier to the later position.
 - boxarg: within the box on each of its lines (p. 34).
 - markarg: the box between the cursor and the marker (p. 34). ORACLE S6.
+- colarg (project addition, argcol.md): within the column-anchored stream on each line it touches — the anchor's own line only from the anchor's column onward (or up to it, going up), every other line in full.
 A match must lie entirely within the range and within one line.
 
 ### Matching (plan §10)

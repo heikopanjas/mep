@@ -18,13 +18,32 @@ use crate::{
 /// `arg`: starts arg mode or raises the count; clears the text to its end while typing (arg.md)
 pub(crate) fn arg(ed: &mut Editor, _: Arg) -> Step
 {
+    start_arg(ed, false)
+}
+
+/// `argcol`: like `arg`, but a selection built from it keeps the anchor's column instead of
+/// taking whole lines (project addition, argcol.md)
+// ORACLE: CMD-ARGCOL-1
+pub(crate) fn argcol(ed: &mut Editor, _: Arg) -> Step
+{
+    start_arg(ed, true)
+}
+
+/// Shared body of `arg`/`argcol`: starts arg mode or raises the count; clears the text to its
+/// end while typing (CMD-ARG-1, CMD-ARG-2). A repeat press never turns an existing column
+/// anchor back off: only `argcol` can set it, but either function can keep it.
+fn start_arg(ed: &mut Editor, col: bool) -> Step
+{
     let cursor = ed.cursor();
     match &mut ed.arg
     {
-        | None => ed.arg = Some(ArgState { count: 1, anchor: cursor, text: None }),
+        | None => ed.arg = Some(ArgState { count: 1, anchor: cursor, text: None, col }),
         | Some(ArgState { text: Some(text), .. }) => text.chars.truncate(text.cursor),
-        // ORACLE: CMD-ARG-1, CMD-ARG-2
-        | Some(state) => state.count += 1
+        | Some(state) =>
+        {
+            state.count += 1;
+            state.col = state.col || col;
+        }
     }
     Step::Done(true)
 }
@@ -55,7 +74,7 @@ pub(crate) fn lasttext(ed: &mut Editor, _: Arg) -> Step
     let text = TextArg { chars: ed.last_text.clone(), cursor: ed.last_text.len() };
     match &mut ed.arg
     {
-        | None => ed.arg = Some(ArgState { count: 1, anchor: cursor, text: Some(text) }),
+        | None => ed.arg = Some(ArgState { count: 1, anchor: cursor, text: Some(text), col: false }),
         | Some(state) if state.text.is_some() || state.anchor == cursor => state.text = Some(text),
         | Some(_) =>
         {
@@ -95,6 +114,8 @@ pub(crate) fn assign(ed: &mut Editor, arg: Arg) -> Step
                 String::from_utf8_lossy(&shown[crate::cells::box_range(&shown, left, right)]).trim_end().to_string()
             })
             .collect(),
+        | Arg::Stream { start, end, .. } =>
+            crate::commands::edit::stream_rows(ed, start, end).into_iter().map(|row| String::from_utf8_lossy(&row).into_owned()).collect(),
         | other => vec![other.into_text()]
     };
     let errors: Vec<String> = statements

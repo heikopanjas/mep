@@ -37,11 +37,12 @@ pub(crate) fn copy(ed: &mut Editor, arg: Arg) -> Step
                 }
             }
         }
-        | Arg::Stream { start, end, .. } =>
+        | Arg::Stream { start, end, .. } if start.line == end.line =>
         {
             let shown = ed.shown_line(start.line);
             Clip { shape: Shape::Stream, lines: vec![shown[cells::box_range(&shown, start.col, end.col)].to_vec()] }
         }
+        | Arg::Stream { start, end, .. } => Clip { shape: Shape::Stream, lines: crate::commands::edit::stream_rows(ed, start, end) },
         | Arg::Box { top, bottom, left, right, .. } =>
         {
             let rows = (top..=bottom)

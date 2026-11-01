@@ -68,6 +68,31 @@ arg "2" ldelete
 1
 2
 
+== name: argcol does not change a numarg selection
+-- file a.txt
+1
+2
+3
+4
+-- args a.txt
+-- keys
+argcol "2" ldelete
+-- expect file a.txt
+3
+4
+-- expect clipboard line
+1
+2
+
+== name: argcol does not change a marker selection
+-- file a.txt
+abcdef
+-- args a.txt
+-- keys
+right argcol arg "m" mark right right right argcol "m" copy
+-- expect clipboard stream
+bcd
+
 == name: number for a function without numarg is text
 -- file a.txt
 x
@@ -152,6 +177,72 @@ abcdef
 -- size 60 4
 -- keys
 arg right right
+-- expect frame
+abcdef
+
+
+/work/a.txt (text NL) Length=1  Window=(1,1)
+
+== name: a column-anchored selection is highlighted in the frame
+-- file a.txt
+abcdef
+ghijkl
+mnopqr
+-- args a.txt
+-- size 60 6
+-- keys
+right right argcol down down
+-- expect frame
+abcdef
+ghijkl
+mnopqr
+
+
+/work/a.txt (text NL) Length=3  Window=(1,1)
+
+== name: a column-anchored selection going up is highlighted in the frame
+-- file a.txt
+abcdef
+ghijkl
+mnopqr
+-- args a.txt
+-- size 60 6
+-- keys
+down down right right argcol up up
+-- expect frame
+abcdef
+ghijkl
+mnopqr
+
+
+/work/a.txt (text NL) Length=3  Window=(1,1)
+
+== name: a column-anchored selection does not highlight a rendered line above it
+-- file a.txt
+alpha
+beta
+gamma
+delta
+-- args a.txt
+-- size 60 7
+-- keys
+down down right right argcol up
+-- expect frame
+alpha
+beta
+gamma
+delta
+
+
+/work/a.txt (text NL) Length=4  Window=(1,1)
+
+== name: a column-anchored selection within one line is highlighted like a box
+-- file a.txt
+abcdef
+-- args a.txt
+-- size 60 4
+-- keys
+right right argcol right right
 -- expect frame
 abcdef
 

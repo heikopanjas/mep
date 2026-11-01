@@ -17,7 +17,7 @@ With nothing left to undo: no change, no message. Returns true in every case (Ta
 
 Undo is per file. After switching files, `undo` works on the new current file's history. `refresh` discards the history of the reloaded file.
 
-There is no redo; undo itself is not recorded, so `undo undo` goes back two steps (p. 9).
+The manual itself has no redo; undo itself is not recorded, so `undo undo` goes back two steps (p. 9). The project adds a `redo` command (`redo.md`) that reapplies what `undo` undid; `redo` does not clear what further `undo` calls can still reach, so the two interleave cleanly.
 
 ### meta
 No meta form. Meta is ignored and cleared.
@@ -28,7 +28,7 @@ Any argument (nullarg, text, numarg, any selection) → `invalid argument`, fals
 ## Open points
 - Macro as one undo step: ORACLE UNDO-1.
 - The `modified` flag after undoing back to the saved state: we leave the file marked modified. ORACLE CMD-UNDO-1.
-- IMPLEMENTATION_PLAN.md §8 task 12 says "Undo/redo of every editing command". The M guide has no redo function or form. We implement no redo; the task wording needs the owner's confirmation.
+- IMPLEMENTATION_PLAN.md §8 task 12 says "Undo/redo of every editing command". The M guide has no redo function or form. Resolved 2026-11-01: the owner confirmed `redo` should exist, as a project addition — see `redo.md` and ORACLE REDO-1.
 
 ## Test checklist
 - Type `abc`, `undo` → line restored, cursor back where typing started, true.

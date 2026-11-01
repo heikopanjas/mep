@@ -6,7 +6,7 @@ use std::ops::Range;
 
 use crate::{
     GapBuffer, Result,
-    cells::{Entab, entab},
+    cells::{Retab, entab},
     lines::LineIndex
 };
 
@@ -70,13 +70,7 @@ impl Text
         Ok(())
     }
 
-    /// Marks all lines as unedited, after saving
-    pub fn clear_edited(&mut self)
-    {
-        self.index.clear_edited();
-    }
-
-    /// Returns `true` if line `line` was edited since loading or saving; `line` must exist
+    /// Returns `true` if line `line` was edited since loading; `line` must exist
     pub fn is_edited(&self, line: usize) -> bool
     {
         self.index.edited(line)
@@ -85,8 +79,8 @@ impl Text
     /// Returns the bytes to save
     ///
     /// Edited lines lose their trailing spaces unless `trailspace` is set and are
-    /// re-tabbed with `mode` (plan §5.2, §5.3). Unedited lines are copied byte-exact.
-    pub fn save_bytes(&self, mode: Entab, trailspace: bool) -> Vec<u8>
+    /// re-tabbed with `retab` (plan §5.2, §5.3). Unedited lines are copied byte-exact.
+    pub fn save_bytes(&self, retab: Retab, trailspace: bool) -> Vec<u8>
     {
         let mut bytes = Vec::with_capacity(self.len());
         for line in 0..self.line_count()
@@ -99,7 +93,7 @@ impl Text
                     | true => content.len(),
                     | false => content.iter().rposition(|byte| *byte != b' ').map_or(0, |last| last + 1)
                 };
-                bytes.extend(entab(&content[..kept], mode));
+                bytes.extend(entab(&content[..kept], retab));
             }
             else
             {
@@ -204,6 +198,12 @@ impl From<Vec<u8>> for Text
 mod tests
 {
     use super::*;
+    use crate::cells::{Entab, TAB_WIDTH};
+
+    fn retab(mode: Entab) -> Retab
+    {
+        Retab { mode, tab: TAB_WIDTH, indent: false }
+    }
 
     const ROUND_TRIP: &[&[u8]] =
         &[b"", b"lf\nonly\n", b"crlf\r\nonly\r\n", b"mixed\r\nends\nhere\r\n", b"no final\nnewline", b"bad \xff\xfe utf8\n\xc3\n", b"\r\n\n\r\r\n"];
@@ -287,14 +287,12 @@ mod tests
     fn test_save_bytes_keeps_unedited_lines_and_cleans_edited_ones()
     {
         let mut text = Text::from(b"keep   \r\n        tab   \nend".to_vec());
-        assert_eq!(text.save_bytes(Entab::Everywhere, false), text.to_bytes());
+        assert_eq!(text.save_bytes(retab(Entab::Everywhere), false), text.to_bytes());
         text.insert(17, b"x").unwrap();
         assert!(text.is_edited(1));
         assert!(text.is_edited(0) == false);
-        assert_eq!(text.save_bytes(Entab::OutsideQuotes, false), b"keep   \r\n\txtab\nend");
-        assert_eq!(text.save_bytes(Entab::Never, true), b"keep   \r\n        xtab   \nend");
-        text.clear_edited();
-        assert_eq!(text.save_bytes(Entab::OutsideQuotes, false), text.to_bytes());
+        assert_eq!(text.save_bytes(retab(Entab::OutsideQuotes), false), b"keep   \r\n\txtab\nend");
+        assert_eq!(text.save_bytes(retab(Entab::Never), true), b"keep   \r\n        xtab   \nend");
     }
 
     #[test]
@@ -302,7 +300,7 @@ mod tests
     {
         let mut text = Text::from(b"a\n".to_vec());
         text.insert(2, b"   ").unwrap();
-        assert_eq!(text.save_bytes(Entab::Never, false), b"a\n");
+        assert_eq!(text.save_bytes(retab(Entab::Never), false), b"a\n");
     }
 
     #[test]
