@@ -193,9 +193,8 @@ Also postponed by the owner on 2026-11-01; M3 is not accepted until these pass:
 
 M4 checks still open:
 
-- `shell`/`compile` by hand on Linux and on Windows (`cmd /C`); the extension acceptance test (`crates/mep/tests/filter.rs`) passed in CI on Linux and on Windows with clang, macOS passed
-- Ctrl+C during a `shell` command on Windows (`SetConsoleCtrlHandler`); macOS passed through a pty
-- Shift+F3 (`compile`) on terminals without the kitty keyboard protocol: crossterm reads the xterm sequence `CSI 1;2R` as a cursor position report and drops it
+- `shell` by hand on Linux; `compile` by hand on Linux and on Windows. `shell` passed by hand on Windows (`cmd /C`: a command, a failing command, Ctrl+C during `ping -t` with `SetConsoleCtrlHandler`); the extension acceptance test (`crates/mep/tests/filter.rs`) passed in CI on Linux and on Windows with clang, macOS passed
+- Shift+F3 (`compile`) on terminals without the kitty keyboard protocol: crossterm reads the xterm sequence `CSI 1;2R` as a cursor position report and drops it. Open on Linux and macOS only: on Windows crossterm reads console key events, and Shift+F3 reaches `compile` (`No more compile messages` without a compile)
 
 ## Recent Updates & Decisions
 

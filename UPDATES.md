@@ -4,6 +4,19 @@ This file is the append-only log of project decisions and notable changes, maint
 
 <!-- {changelog} -->
 
+### 2026-11-01 (v0.15.1, shell verified on windows, 17:00)
+
+- the owner ran shell by hand on windows: arg dir shell, a failing dir command, and ctrl+c during ping -t all behaved as shell.md requires
+- the pending items for shell on windows and for ctrl+c during shell on windows are done; shell on linux and compile by hand on linux and windows stay open
+- no version bump: documentation only
+
+### 2026-11-01 (v0.15.1, shift f3 on windows, 16:45)
+
+- the owner confirmed by hand that shift+f3 reaches compile on windows; without a compile it shows no more compile messages, as compile.md requires
+- the pending shift+f3 item stays open only for linux and macos terminals without the kitty keyboard protocol
+- rationale: on windows crossterm reads console key events instead of escape sequences, so the csi 1;2r cursor report clash cannot occur
+- no version bump: documentation only
+
 ### 2026-11-01 (v0.15.1, ignore object files, 16:15)
 
 - .gitignore ignores *.obj files
