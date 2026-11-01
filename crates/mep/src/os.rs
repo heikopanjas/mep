@@ -108,7 +108,7 @@ impl Env for OsEnv
 /// Returns the local UTC offset in seconds: from `TZ` (a POSIX rule or a zone file name) or `/etc/localtime`; 0 if unknown
 pub fn local_offset(tz: Option<&str>, read: &dyn Fn(&Path) -> Option<Vec<u8>>, utc: i64) -> i64
 {
-    let zone_file = |name: &str| read(&Path::new("/usr/share/zoneinfo").join(name)).or_else(|| read(Path::new(name)));
+    let zone_file = |name: &str| read(Path::new(&format!("/usr/share/zoneinfo/{name}"))).or_else(|| read(Path::new(name)));
     let offset = match tz.map(|tz| tz.strip_prefix(':').unwrap_or(tz))
     {
         | Some(tz) if tz.contains('/') => zone_file(tz).and_then(|bytes| tz::offset_at(&bytes, utc)),
